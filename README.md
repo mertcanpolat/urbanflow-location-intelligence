@@ -194,6 +194,25 @@ urbanflow-location-intelligence/
 └── requirements.txt
 ```
 
+## Screenshots
+
+### Dashboard Overview
+
+![UrbanFlow dashboard overview](docs/screenshots/dashboard-overview.png)
+
+### Taxi Zone Demand Map
+
+![NYC taxi zone demand map](docs/screenshots/taxi-zone-map.png)
+
+### Demand Analysis
+
+![UrbanFlow demand charts](docs/screenshots/demand-chart.png)
+
+### API Documentation
+
+![FastAPI Swagger documentation](docs/screenshots/swagger-api.png)
+
+
 ## Main Features
 
 ### Spatial Taxi-Zone Map
