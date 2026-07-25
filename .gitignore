@@ -1,0 +1,34 @@
+# Secrets
+.env
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Project data
+data/raw/*
+data/processed/*
+
+# Keep empty directories
+!data/raw/.gitkeep
+!data/processed/.gitkeep
+
+# Logs
+logs/
+*.log
+
+# Editors and operating system
+.vscode/
+.idea/
+Thumbs.db
+.DS_Store
+
+# Local backups
+*.backup
+*.dump

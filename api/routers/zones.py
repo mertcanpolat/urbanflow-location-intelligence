@@ -1,0 +1,109 @@
+from typing import Any
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+
+
+from api.models.filters import (
+    DashboardFilters,
+    get_dashboard_filters,
+)
+from api.models.responses import (
+    GeoJSONFeatureCollection,
+    HourlyDemandItem,
+    ZoneRankingItem,
+)
+
+from api.services.zone_service import (
+    get_boroughs as get_boroughs_service,
+    get_top_zones as get_top_zones_service,
+    get_zone_hourly_demand as get_zone_hourly_demand_service,
+    get_zone_ranking as get_zone_ranking_service,
+    get_zones_geojson as get_zones_geojson_service,
+)
+
+router = APIRouter(
+    prefix="/api/v1",
+    tags=["Zones"],
+)
+
+@router.get(
+    "/boroughs",
+    response_model=list[str],
+)
+def get_boroughs() -> list[str]:
+    """Return distinct Taxi Zone borough names."""
+
+    return get_boroughs_service()
+
+@router.get("/zones/top")
+def get_top_zones(
+    limit: int = Query(
+        default=10,
+        ge=1,
+        le=100,
+        description="Döndürülecek bölge sayısı.",
+    ),
+) -> list[dict[str, Any]]:
+    """Return zones with the highest pickup demand."""
+
+    return get_top_zones_service(limit)
+
+@router.get(
+    "/zones/geojson",
+    response_model=GeoJSONFeatureCollection,
+)
+def get_zones_geojson(
+    filters: DashboardFilters = Depends(
+        get_dashboard_filters
+    ),
+) -> dict[str, Any]:
+    """Return filtered Taxi Zones as GeoJSON."""
+
+    return get_zones_geojson_service(filters)
+
+@router.get(
+    "/zones/ranking",
+    response_model=list[ZoneRankingItem],
+)
+def get_zone_ranking(
+    filters: DashboardFilters = Depends(
+        get_dashboard_filters
+    ),
+    limit: int = Query(
+        default=10,
+        ge=1,
+        le=50,
+        description="Döndürülecek bölge sayısı.",
+    ),
+) -> list[dict[str, Any]]:
+    """Return the highest-demand Taxi Zones."""
+
+    return get_zone_ranking_service(
+        filters=filters,
+        limit=limit,
+    )
+
+@router.get(
+    "/zones/{location_id}/hourly",
+    response_model=list[HourlyDemandItem],
+)
+def get_zone_hourly_demand(
+    location_id: int,
+    filters: DashboardFilters = Depends(
+        get_dashboard_filters
+    ),
+) -> list[dict[str, Any]]:
+    """Return hourly demand totals for one Taxi Zone."""
+
+    result = get_zone_hourly_demand_service(
+        location_id=location_id,
+        filters=filters,
+    )
+
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Taxi Zone bulunamadı.",
+        )
+
+    return result
