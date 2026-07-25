@@ -167,7 +167,10 @@ def fetch_zones_geojson(
             d.avg_total_amount,
             d.avg_trip_distance,
             ST_AsGeoJSON(
-                z.geom,
+                ST_SimplifyPreserveTopology(
+                    z.geom,
+                    0.0001
+                ),
                 6
             )::json AS geometry
 
