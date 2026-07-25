@@ -17,6 +17,13 @@ jobs:
     name: Run Pytest
     runs-on: ubuntu-latest
 
+    env:
+      DB_HOST: localhost
+      DB_PORT: "5432"
+      DB_NAME: urbanflow_test
+      DB_USER: urbanflow_test_user
+      DB_PASSWORD: urbanflow_test_password
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
