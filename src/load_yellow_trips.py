@@ -439,6 +439,28 @@ def move_staging_to_core(
         cursor.execute(sql)
         return cursor.rowcount
 
+def refresh_analytics_views(
+    connection: psycopg.Connection,
+) -> None:
+    """Dashboard tarafından kullanılan materialized view'ları yeniler."""
+
+    logging.info(
+        "Materialized view yenileniyor: "
+        "analytics.zone_hourly_demand"
+    )
+
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            REFRESH MATERIALIZED VIEW
+                analytics.zone_hourly_demand
+            """
+        )
+
+    logging.info(
+        "Materialized view yenilendi: "
+        "analytics.zone_hourly_demand"
+    )
 
 def main() -> None:
     logging.basicConfig(
@@ -534,6 +556,9 @@ def main() -> None:
                 "TRUNCATE TABLE staging.yellow_trips_load"
             )
 
+        connection.commit()
+
+        refresh_analytics_views(connection)
         connection.commit()
 
         logging.info("Toplam geçerli kayıt: %s", f"{total_valid:,}")
