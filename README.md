@@ -1,5 +1,7 @@
 # UrbanFlow Location Intelligence
 
+[![Tests](https://github.com/mertcanpolat/urbanflow-location-intelligence/actions/workflows/tests.yml/badge.svg)](https://github.com/mertcanpolat/urbanflow-location-intelligence/actions/workflows/tests.yml)
+
 UrbanFlow Location Intelligence is a full-stack geospatial data project developed to analyse New York City Yellow Taxi demand by location and time.
 
 The project combines spatial ETL, PostgreSQL/PostGIS, a FastAPI backend, and an interactive Leaflet dashboard. Its main purpose is not only to produce a working application, but also to demonstrate how a GIS-oriented data product can be designed with maintainable software architecture, testing, containerisation, and technical documentation.
