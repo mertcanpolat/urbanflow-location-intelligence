@@ -647,6 +647,6 @@ GitHub: [mertcanpolat](https://github.com/mertcanpolat)
 
 ## Licence
 
-A licence has not yet been selected.
+This project is licensed under the MIT License.
 
-Before wider reuse or external contribution, add an appropriate licence such as MIT, Apache-2.0, or another licence that matches the intended use of the project.
+See the [LICENSE](LICENSE) file for details.
