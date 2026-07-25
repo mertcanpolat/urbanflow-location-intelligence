@@ -1014,51 +1014,6 @@ function getDashboardFilterParameters() {
     return parameters;
 }
 
-function getDashboardFilterParameters() {
-    const borough = document
-        .getElementById("borough-filter")
-        .value;
-
-    const hour = document
-        .getElementById("hour-filter")
-        .value;
-
-    const weekday = document
-        .getElementById("weekday-filter")
-        .value;
-
-    const dateFrom = document
-        .getElementById("date-from-filter")
-        .value;
-
-    const dateTo = document
-        .getElementById("date-to-filter")
-        .value;
-
-    const parameters = new URLSearchParams();
-
-    if (borough) {
-        parameters.set("borough", borough);
-    }
-
-    if (hour !== "") {
-        parameters.set("hour", hour);
-    }
-
-    if (weekday !== "") {
-        parameters.set("weekday", weekday);
-    }
-
-    if (dateFrom !== "") {
-        parameters.set("date_from", dateFrom);
-    }
-
-    if (dateTo !== "") {
-        parameters.set("date_to", dateTo);
-    }
-
-    return parameters;
-}
 
 function buildFilteredApiUrl(
     endpoint,
