@@ -9,6 +9,7 @@ from api.repositories.zone_repository import (
     fetch_zone_hourly_demand,
     fetch_zone_ranking,
     fetch_zones_geojson,
+    fetch_zone_hotspots,
 )
 
 
@@ -93,3 +94,14 @@ def get_zone_hourly_demand(
         location_id=location_id,
         filters=filters,
     )
+
+def get_zone_hotspots(
+    filters: DashboardFilters,
+) -> dict[str, Any]:
+    """Return spatial hotspot classifications."""
+
+    logger.info(
+        "Preparing zone hotspot analysis"
+    )
+
+    return fetch_zone_hotspots(filters)

@@ -37,7 +37,30 @@ class ZoneRankingItem(BaseModel):
     avg_total_amount: float | None
     avg_trip_distance: float | None
 
+class GeoJSONGeometry(BaseModel):
+    type: str
+    coordinates: Any
 
+class ZoneHotspotProperties(BaseModel):
+    location_id: int
+    zone_name: str
+    borough: str
+    trip_count: int
+    neighbour_count: int
+    neighbour_avg_trip_count: float
+    hotspot_score: int
+    hotspot_class: str
+
+class ZoneHotspotFeature(BaseModel):
+    type: str
+    geometry: GeoJSONGeometry
+    properties: ZoneHotspotProperties
+
+
+class ZoneHotspotFeatureCollection(BaseModel):
+    type: str
+    features: list[ZoneHotspotFeature]
+    
 class HourlyDemandItem(BaseModel):
     pickup_hour: int
     trip_count: int
@@ -53,11 +76,6 @@ class ZoneProperties(BaseModel):
     avg_trip_distance: float | None
     demand_class_id: int
     demand_class: str
-
-class GeoJSONGeometry(BaseModel):
-    type: str
-    coordinates: Any
-
 
 class GeoJSONFeature(BaseModel):
     type: str

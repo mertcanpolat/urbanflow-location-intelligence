@@ -11,6 +11,7 @@ from api.models.responses import (
     GeoJSONFeatureCollection,
     HourlyDemandItem,
     ZoneRankingItem,
+    ZoneHotspotFeatureCollection,
 )
 
 from api.services.zone_service import (
@@ -19,6 +20,7 @@ from api.services.zone_service import (
     get_zone_hourly_demand as get_zone_hourly_demand_service,
     get_zone_ranking as get_zone_ranking_service,
     get_zones_geojson as get_zones_geojson_service,
+    get_zone_hotspots as get_zone_hotspots_service,
 )
 
 router = APIRouter(
@@ -60,6 +62,19 @@ def get_zones_geojson(
     """Return filtered Taxi Zones as GeoJSON."""
 
     return get_zones_geojson_service(filters)
+
+@router.get(
+    "/zones/hotspots",
+    response_model=ZoneHotspotFeatureCollection,
+)
+def get_zone_hotspots(
+    filters: DashboardFilters = Depends(
+        get_dashboard_filters
+    ),
+) -> dict[str, Any]:
+    """Return spatial hotspot classifications."""
+
+    return get_zone_hotspots_service(filters)
 
 @router.get(
     "/zones/ranking",

@@ -128,3 +128,53 @@ def test_zone_hourly_demand(
 
     assert response.status_code == 200
     assert response.json() == expected_result
+    
+def test_zone_hotspots(
+    client: TestClient,
+    monkeypatch,
+) -> None:
+    expected_result = {
+        "type": "FeatureCollection",
+        "features": [
+            {
+                "type": "Feature",
+                "geometry": {
+                    "type": "Polygon",
+                    "coordinates": [
+                        [
+                            [-73.99, 40.75],
+                            [-73.98, 40.75],
+                            [-73.98, 40.76],
+                            [-73.99, 40.75],
+                        ]
+                    ],
+                },
+                "properties": {
+                    "location_id": 161,
+                    "zone_name": "Midtown Center",
+                    "borough": "Manhattan",
+                    "trip_count": 8500,
+                    "neighbour_count": 4,
+                    "neighbour_avg_trip_count": 7200.5,
+                    "hotspot_score": 2,
+                    "hotspot_class": "Hotspot",
+                },
+            }
+        ],
+    }
+
+    def fake_get_zone_hotspots(filters):
+        return expected_result
+
+    monkeypatch.setattr(
+        zones_router,
+        "get_zone_hotspots_service",
+        fake_get_zone_hotspots,
+    )
+
+    response = client.get(
+        "/api/v1/zones/hotspots"
+    )
+
+    assert response.status_code == 200
+    assert response.json() == expected_result

@@ -52,10 +52,12 @@ def fetch_top_zones(
             z.zone_name,
             z.borough,
             COUNT(*) AS trip_count,
+
             ROUND(
                 AVG(t.trip_distance),
                 2
             ) AS avg_trip_distance,
+
             ROUND(
                 AVG(t.total_amount),
                 2
@@ -113,58 +115,58 @@ def fetch_zones_geojson(
             SELECT
                 d.location_id,
 
-            SUM(
-                d.trip_count
-            )::bigint AS trip_count,
+                SUM(
+                    d.trip_count
+                )::bigint AS trip_count,
 
-            ROUND(
-                (
-                    SUM(d.total_amount)
-                    / NULLIF(SUM(d.trip_count), 0)
-                )::numeric,
-                2
-            ) AS avg_total_amount,
+                ROUND(
+                    (
+                        SUM(d.total_amount)
+                        / NULLIF(SUM(d.trip_count), 0)
+                    )::numeric,
+                    2
+                ) AS avg_total_amount,
 
-            ROUND(
-                (
-                    SUM(
-                        d.avg_trip_distance
-                        * d.trip_count
-                    )
-                    / NULLIF(SUM(d.trip_count), 0)
-                )::numeric,
-                2
-            ) AS avg_trip_distance
+                ROUND(
+                    (
+                        SUM(
+                            d.avg_trip_distance
+                            * d.trip_count
+                        )
+                        / NULLIF(SUM(d.trip_count), 0)
+                    )::numeric,
+                    2
+                ) AS avg_trip_distance
 
-        FROM analytics.zone_hourly_demand AS d
+            FROM analytics.zone_hourly_demand AS d
 
-        JOIN core.taxi_zones AS z
-            ON d.location_id = z.location_id
+            JOIN core.taxi_zones AS z
+                ON d.location_id = z.location_id
 
-        WHERE (
-            CAST(:borough AS VARCHAR) IS NULL
-            OR z.borough = CAST(:borough AS VARCHAR)
-        )
-        AND (
-            CAST(:hour AS SMALLINT) IS NULL
-            OR d.pickup_hour = CAST(:hour AS SMALLINT)
-        )
-        AND (
-            CAST(:weekday AS SMALLINT) IS NULL
-            OR EXTRACT(ISODOW FROM d.pickup_date)
-                = CAST(:weekday AS SMALLINT)
-        )
-        AND (
-            CAST(:date_from AS DATE) IS NULL
-            OR d.pickup_date >= CAST(:date_from AS DATE)
-        )
-        AND (
-            CAST(:date_to AS DATE) IS NULL
-            OR d.pickup_date <= CAST(:date_to AS DATE)
-        )
+            WHERE (
+                CAST(:borough AS VARCHAR) IS NULL
+                OR z.borough = CAST(:borough AS VARCHAR)
+            )
+            AND (
+                CAST(:hour AS SMALLINT) IS NULL
+                OR d.pickup_hour = CAST(:hour AS SMALLINT)
+            )
+            AND (
+                CAST(:weekday AS SMALLINT) IS NULL
+                OR EXTRACT(ISODOW FROM d.pickup_date)
+                    = CAST(:weekday AS SMALLINT)
+            )
+            AND (
+                CAST(:date_from AS DATE) IS NULL
+                OR d.pickup_date >= CAST(:date_from AS DATE)
+            )
+            AND (
+                CAST(:date_to AS DATE) IS NULL
+                OR d.pickup_date <= CAST(:date_to AS DATE)
+            )
 
-        GROUP BY d.location_id
-    ),
+            GROUP BY d.location_id
+        ),
 
         classified_demand AS (
             SELECT
@@ -295,7 +297,10 @@ def fetch_zone_ranking(
             d.location_id,
             z.zone_name,
             z.borough,
-            SUM(d.trip_count)::bigint AS trip_count,
+
+            SUM(
+                d.trip_count
+            )::bigint AS trip_count,
 
             ROUND(
                 (
@@ -443,7 +448,10 @@ def fetch_zone_hourly_demand(
         """
         SELECT
             pickup_hour,
-            SUM(trip_count)::bigint AS trip_count,
+
+            SUM(
+                trip_count
+            )::bigint AS trip_count,
 
             ROUND(
                 (
@@ -474,6 +482,7 @@ def fetch_zone_hourly_demand(
         )
 
         GROUP BY pickup_hour
+
         ORDER BY pickup_hour
         """
     )
@@ -497,3 +506,259 @@ def fetch_zone_hourly_demand(
     )
 
     return result
+
+
+def fetch_zone_hotspots(
+    filters: DashboardFilters,
+) -> dict[str, Any]:
+    parameters = filters_to_dict(filters)
+
+    logger.info(
+        "Fetching zone hotspots with filters=%s",
+        parameters,
+    )
+
+    query = text(
+        """
+        WITH filtered_demand AS (
+            SELECT
+                d.location_id,
+
+                SUM(
+                    d.trip_count
+                )::bigint AS trip_count
+
+            FROM analytics.zone_hourly_demand AS d
+
+            JOIN core.taxi_zones AS z
+                ON d.location_id = z.location_id
+
+            WHERE (
+                CAST(:borough AS VARCHAR) IS NULL
+                OR z.borough = CAST(:borough AS VARCHAR)
+            )
+            AND (
+                CAST(:hour AS SMALLINT) IS NULL
+                OR d.pickup_hour = CAST(:hour AS SMALLINT)
+            )
+            AND (
+                CAST(:weekday AS SMALLINT) IS NULL
+                OR EXTRACT(ISODOW FROM d.pickup_date)
+                    = CAST(:weekday AS SMALLINT)
+            )
+            AND (
+                CAST(:date_from AS DATE) IS NULL
+                OR d.pickup_date >= CAST(:date_from AS DATE)
+            )
+            AND (
+                CAST(:date_to AS DATE) IS NULL
+                OR d.pickup_date <= CAST(:date_to AS DATE)
+            )
+
+            GROUP BY d.location_id
+        ),
+
+        selected_zones AS (
+            SELECT
+                z.location_id,
+                z.zone_name,
+                z.borough,
+                z.geom,
+
+                COALESCE(
+                    d.trip_count,
+                    0
+                )::bigint AS trip_count
+
+            FROM core.taxi_zones AS z
+
+            LEFT JOIN filtered_demand AS d
+                ON z.location_id = d.location_id
+
+            WHERE (
+                CAST(:borough AS VARCHAR) IS NULL
+                OR z.borough = CAST(:borough AS VARCHAR)
+            )
+        ),
+
+        neighbours AS (
+            SELECT
+                a.location_id,
+
+                COUNT(
+                    b.location_id
+                )::integer AS neighbour_count,
+
+                COALESCE(
+                    AVG(
+                        b.trip_count
+                    ),
+                    0
+                )::numeric AS neighbour_avg_trip_count
+
+            FROM selected_zones AS a
+
+            LEFT JOIN selected_zones AS b
+                ON a.location_id <> b.location_id
+                AND ST_Touches(
+                    a.geom,
+                    b.geom
+                )
+
+            GROUP BY a.location_id
+        ),
+
+        scored AS (
+            SELECT
+                z.location_id,
+                z.zone_name,
+                z.borough,
+                z.geom,
+                z.trip_count,
+
+                COALESCE(
+                    n.neighbour_count,
+                    0
+                ) AS neighbour_count,
+
+                ROUND(
+                    COALESCE(
+                        n.neighbour_avg_trip_count,
+                        0
+                    ),
+                    2
+                ) AS neighbour_avg_trip_count
+
+            FROM selected_zones AS z
+
+            LEFT JOIN neighbours AS n
+                ON z.location_id = n.location_id
+        ),
+
+        percentiles AS (
+            SELECT
+                location_id,
+                zone_name,
+                borough,
+                geom,
+                trip_count,
+                neighbour_count,
+                neighbour_avg_trip_count,
+
+                CUME_DIST() OVER (
+                    ORDER BY trip_count
+                ) AS zone_percentile,
+
+                CUME_DIST() OVER (
+                    ORDER BY neighbour_avg_trip_count
+                ) AS neighbour_percentile
+
+            FROM scored
+        )
+
+        SELECT
+            location_id,
+            zone_name,
+            borough,
+            trip_count,
+            neighbour_count,
+            neighbour_avg_trip_count,
+
+            CASE
+                WHEN neighbour_count = 0 THEN 0
+
+                WHEN zone_percentile >= 0.80
+                AND neighbour_percentile >= 0.80
+                    THEN 2
+
+                WHEN zone_percentile >= 0.60
+                AND neighbour_percentile >= 0.60
+                    THEN 1
+
+                WHEN zone_percentile <= 0.20
+                AND neighbour_percentile <= 0.20
+                    THEN -2
+
+                WHEN zone_percentile <= 0.40
+                AND neighbour_percentile <= 0.40
+                    THEN -1
+
+                ELSE 0
+            END::smallint AS hotspot_score,
+
+            CASE
+                WHEN neighbour_count = 0
+                    THEN 'Nötr'
+
+                WHEN zone_percentile >= 0.80
+                AND neighbour_percentile >= 0.80
+                    THEN 'Hotspot'
+
+                WHEN zone_percentile >= 0.60
+                AND neighbour_percentile >= 0.60
+                    THEN 'Potansiyel Hotspot'
+
+                WHEN zone_percentile <= 0.20
+                AND neighbour_percentile <= 0.20
+                    THEN 'Coldspot'
+
+                WHEN zone_percentile <= 0.40
+                AND neighbour_percentile <= 0.40
+                    THEN 'Potansiyel Coldspot'
+
+                ELSE 'Nötr'
+            END AS hotspot_class,
+
+            ST_AsGeoJSON(
+                ST_SimplifyPreserveTopology(
+                    geom,
+                    0.0001
+                ),
+                6
+            )::json AS geometry
+
+        FROM percentiles
+
+        ORDER BY location_id
+        """
+    )
+
+    with engine.connect() as connection:
+        rows = (
+            connection.execute(
+                query,
+                parameters,
+            )
+            .mappings()
+            .all()
+        )
+
+    features = [
+        {
+            "type": "Feature",
+            "geometry": row["geometry"],
+            "properties": {
+                "location_id": row["location_id"],
+                "zone_name": row["zone_name"],
+                "borough": row["borough"],
+                "trip_count": row["trip_count"],
+                "neighbour_count": row["neighbour_count"],
+                "neighbour_avg_trip_count": float(
+                    row["neighbour_avg_trip_count"]
+                ),
+                "hotspot_score": row["hotspot_score"],
+                "hotspot_class": row["hotspot_class"],
+            },
+        }
+        for row in rows
+    ]
+
+    logger.info(
+        "Zone hotspots generated: feature_count=%s",
+        len(features),
+    )
+
+    return {
+        "type": "FeatureCollection",
+        "features": features,
+    }
