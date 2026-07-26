@@ -12,6 +12,7 @@ from api.models.responses import (
     HourlyDemandItem,
     ZoneRankingItem,
     ZoneHotspotFeatureCollection,
+    ZoneScoreFeatureCollection,
 )
 
 from api.services.zone_service import (
@@ -21,6 +22,8 @@ from api.services.zone_service import (
     get_zone_ranking as get_zone_ranking_service,
     get_zones_geojson as get_zones_geojson_service,
     get_zone_hotspots as get_zone_hotspots_service,
+    get_zone_scores as get_zone_scores_service,
+    
 )
 
 router = APIRouter(
@@ -75,6 +78,19 @@ def get_zone_hotspots(
     """Return spatial hotspot classifications."""
 
     return get_zone_hotspots_service(filters)
+
+@router.get(
+    "/zones/scores",
+    response_model=ZoneScoreFeatureCollection,
+)
+def get_zone_scores(
+    filters: DashboardFilters = Depends(
+        get_dashboard_filters
+    ),
+) -> dict[str, Any]:
+    """Return weighted zone-priority scores."""
+
+    return get_zone_scores_service(filters)
 
 @router.get(
     "/zones/ranking",

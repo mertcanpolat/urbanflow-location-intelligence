@@ -57,6 +57,29 @@ const HOTSPOT_CLASSES = {
     }
 };
 
+const ZONE_SCORE_CLASSES = {
+    veryLow: {
+        label: "Çok Düşük · 0–19",
+        color: "#dbeafe"
+    },
+    low: {
+        label: "Düşük · 20–39",
+        color: "#93c5fd"
+    },
+    medium: {
+        label: "Orta · 40–59",
+        color: "#fde68a"
+    },
+    high: {
+        label: "Yüksek · 60–79",
+        color: "#fb923c"
+    },
+    veryHigh: {
+        label: "Çok Yüksek · 80–100",
+        color: "#b91c1c"
+    }
+};
+
 const DEFAULT_MAP_CENTER = [40.73, -73.93];
 const DEFAULT_MAP_ZOOM = 10;
 const zoneLayersById = new Map();
@@ -115,18 +138,49 @@ function getHotspotColor(hotspotScore) {
     );
 }
 
+function getZoneScoreColor(zoneScore) {
+    const score = Number(zoneScore || 0);
+
+    if (score >= 80) {
+        return ZONE_SCORE_CLASSES.veryHigh.color;
+    }
+
+    if (score >= 60) {
+        return ZONE_SCORE_CLASSES.high.color;
+    }
+
+    if (score >= 40) {
+        return ZONE_SCORE_CLASSES.medium.color;
+    }
+
+    if (score >= 20) {
+        return ZONE_SCORE_CLASSES.low.color;
+    }
+
+    return ZONE_SCORE_CLASSES.veryLow.color;
+}
+
 function zoneStyle(feature) {
     const properties =
         feature.properties || {};
 
-    const fillColor =
-        getMapMode() === "hotspot"
-            ? getHotspotColor(
-                properties.hotspot_score
-            )
-            : getDemandColor(
-                properties.demand_class_id
-            );
+    const mapMode = getMapMode();
+
+    let fillColor;
+
+    if (mapMode === "hotspot") {
+        fillColor = getHotspotColor(
+            properties.hotspot_score
+        );
+    } else if (mapMode === "score") {
+        fillColor = getZoneScoreColor(
+            properties.zone_score
+        );
+    } else {
+        fillColor = getDemandColor(
+            properties.demand_class_id
+        );
+    }
 
     return {
         fillColor,
@@ -248,6 +302,59 @@ function buildHotspotPopup(properties) {
     `;
 }
 
+function buildZoneScorePopup(properties) {
+    return `
+        <strong>${properties.zone_name}</strong><br>
+
+        Borough:
+        ${properties.borough}<br>
+
+        Location ID:
+        ${properties.location_id}<br>
+
+        Öncelik sınıfı:
+        <strong>
+            ${properties.priority_class || "-"}
+        </strong><br>
+
+        Zone skoru:
+        <strong>
+            ${formatNullableNumber(
+                properties.zone_score
+            )}
+        </strong> / 100<br>
+
+        Talep bileşeni:
+        ${formatNullableNumber(
+            properties.demand_score
+        )}<br>
+
+        Hotspot bileşeni:
+        ${formatNullableNumber(
+            properties.hotspot_component_score
+        )}<br>
+
+        Süreklilik bileşeni:
+        ${formatNullableNumber(
+            properties.consistency_score
+        )}<br>
+
+        Aktif gün:
+        ${Number(
+            properties.active_day_count || 0
+        ).toLocaleString("tr-TR")}
+        /
+        ${Number(
+            properties.total_day_count || 0
+        ).toLocaleString("tr-TR")}<br>
+
+        Pickup sayısı:
+        ${Number(
+            properties.trip_count || 0
+        ).toLocaleString("tr-TR")}
+    `;
+}
+
 function onEachFeature(feature, layer) {
     const properties = feature.properties;
     zoneLayersById.set(
@@ -255,10 +362,20 @@ function onEachFeature(feature, layer) {
         layer
     );
 
-    const popupContent =
-        getMapMode() === "hotspot"
-            ? buildHotspotPopup(properties)
-            : buildDemandPopup(properties);
+    const mapMode = getMapMode();
+
+    let popupContent;
+
+    if (mapMode === "hotspot") {
+        popupContent =
+            buildHotspotPopup(properties);
+    } else if (mapMode === "score") {
+        popupContent =
+            buildZoneScorePopup(properties);
+    } else {
+        popupContent =
+            buildDemandPopup(properties);
+    }
 
     layer.bindPopup(popupContent);
 
@@ -301,10 +418,17 @@ function onEachFeature(feature, layer) {
 }
 
 function buildMapDataUrl() {
-    const endpoint =
-        getMapMode() === "hotspot"
-            ? "/api/v1/zones/hotspots"
-            : "/api/v1/zones/geojson";
+    const mapMode = getMapMode();
+
+    let endpoint;
+
+    if (mapMode === "hotspot") {
+        endpoint = "/api/v1/zones/hotspots";
+    } else if (mapMode === "score") {
+        endpoint = "/api/v1/zones/scores";
+    } else {
+        endpoint = "/api/v1/zones/geojson";
+    }
 
     return buildFilteredApiUrl(endpoint);
 }
@@ -1354,6 +1478,10 @@ function updateActiveFilterSummary() {
         activeFilters.push(
             "Hotspot Analizi"
         );
+    } else if (mapModeSelect.value === "score") {
+        activeFilters.push(
+            "Zone Skoru"
+        );
     }
 
     if (boroughSelect.value) {
@@ -1535,24 +1663,43 @@ function updateDemandLegend() {
         return;
     }
 
-    const isHotspot =
-        getMapMode() === "hotspot";
+    const mapMode = getMapMode();
 
-    if (legendTitle) {
-        legendTitle.textContent = isHotspot
-            ? "Hotspot analizi"
-            : "Talep sınıfı";
-    }
+    let classes;
 
-    const classes = isHotspot
-        ? [
+    if (mapMode === "hotspot") {
+        if (legendTitle) {
+            legendTitle.textContent =
+                "Hotspot analizi";
+        }
+
+        classes = [
             HOTSPOT_CLASSES["2"],
             HOTSPOT_CLASSES["1"],
             HOTSPOT_CLASSES["0"],
             HOTSPOT_CLASSES["-1"],
             HOTSPOT_CLASSES["-2"]
-        ]
-        : [
+        ];
+    } else if (mapMode === "score") {
+        if (legendTitle) {
+            legendTitle.textContent =
+                "Zone skoru";
+        }
+
+        classes = [
+            ZONE_SCORE_CLASSES.veryHigh,
+            ZONE_SCORE_CLASSES.high,
+            ZONE_SCORE_CLASSES.medium,
+            ZONE_SCORE_CLASSES.low,
+            ZONE_SCORE_CLASSES.veryLow
+        ];
+    } else {
+        if (legendTitle) {
+            legendTitle.textContent =
+                "Talep sınıfı";
+        }
+
+        classes = [
             DEMAND_CLASSES[5],
             DEMAND_CLASSES[4],
             DEMAND_CLASSES[3],
@@ -1560,6 +1707,7 @@ function updateDemandLegend() {
             DEMAND_CLASSES[1],
             DEMAND_CLASSES[0]
         ];
+    }
 
     legendContent.innerHTML = classes
         .map((item) => `
@@ -1771,7 +1919,7 @@ function clearDashboardData(
     message = "Seçilen filtreler için veri bulunamadı."
 ) {
     clearMapData();
-    clearSummaryCards();
+    clearDashboardSummary();
     clearDailyTrendChart(message);
     clearWeekdayHourHeatmap(message);
     clearDailyDemandForecastChart(message);

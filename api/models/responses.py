@@ -41,6 +41,30 @@ class GeoJSONGeometry(BaseModel):
     type: str
     coordinates: Any
 
+class ZoneScoreProperties(BaseModel):
+    location_id: int
+    zone_name: str
+    borough: str
+    trip_count: int
+    active_day_count: int
+    total_day_count: int
+    demand_score: float
+    hotspot_component_score: float
+    consistency_score: float
+    zone_score: float
+    priority_class: str
+
+
+class ZoneScoreFeature(BaseModel):
+    type: str
+    geometry: GeoJSONGeometry
+    properties: ZoneScoreProperties
+
+
+class ZoneScoreFeatureCollection(BaseModel):
+    type: str
+    features: list[ZoneScoreFeature]
+
 class ZoneHotspotProperties(BaseModel):
     location_id: int
     zone_name: str

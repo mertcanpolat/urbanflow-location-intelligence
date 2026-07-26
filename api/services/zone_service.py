@@ -10,6 +10,7 @@ from api.repositories.zone_repository import (
     fetch_zone_ranking,
     fetch_zones_geojson,
     fetch_zone_hotspots,
+    fetch_zone_scores,
 )
 
 
@@ -105,3 +106,14 @@ def get_zone_hotspots(
     )
 
     return fetch_zone_hotspots(filters)
+
+def get_zone_scores(
+    filters: DashboardFilters,
+) -> dict[str, Any]:
+    """Return weighted zone-priority scores."""
+
+    logger.info(
+        "Preparing zone score analysis"
+    )
+
+    return fetch_zone_scores(filters)
