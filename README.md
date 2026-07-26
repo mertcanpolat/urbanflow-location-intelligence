@@ -31,6 +31,19 @@ The project combines spatial ETL, PostgreSQL/PostGIS, a FastAPI backend, and an 
 - GitHub repository
 - Technical documentation
 
+### Sprint 3 — Performance and Interactive Analytics
+
+- Materialized-view query optimisation
+- GeoJSON geometry simplification
+- Automated materialized-view refresh after ETL
+- API response-time middleware
+- Loading and empty states
+- Active-filter summary
+- Borough-based automatic map zoom
+- Interactive taxi-zone selection controls
+- Weekday–hour demand heatmap
+- Expanded automated test coverage
+
 ## Project Objectives
 
 UrbanFlow aims to answer questions such as:
@@ -245,15 +258,92 @@ The application supports:
 - daily demand trends,
 - hourly demand profiles,
 - top taxi-zone rankings,
+- an interactive 7 × 24 weekday–hour demand heatmap,
 - borough filtering,
+- hour and weekday filtering,
 - date filtering,
-- zone-level analysis.
+- zone-level analysis,
+- coordinated map, KPI, chart, and ranking updates.
 
 ### Materialized View
 
-Aggregated data can be stored in a PostgreSQL materialized view.
+Aggregated demand data is stored in:
 
-This reduces repeated computation for dashboard queries and improves response performance when the underlying trip table is large.
+```sql
+analytics.zone_hourly_demand
+```
+
+The materialized view groups demand by taxi zone, date, and hour. This reduces repeated computation for dashboard queries and substantially improves response performance compared with querying the raw trip table.
+
+The ETL process refreshes the materialized view automatically after new taxi-trip data is loaded:
+
+```sql
+REFRESH MATERIALIZED VIEW analytics.zone_hourly_demand;
+```
+
+## Sprint 3 Performance Results
+
+Sprint 3 focused on query performance, network payload reduction, observability, and interactive spatiotemporal analysis.
+
+### Query Performance
+
+The raw `core.trips` table contains approximately 3.7 million records and occupies about 1.28 GB. The analytical materialized view is approximately 17 MB.
+
+| Query | Raw table | Materialized view | Improvement |
+|---|---:|---:|---:|
+| Zone ranking | 177.6 ms | 21.1 ms | ~8.4× faster |
+| Date-filtered dashboard query | 389 ms | 5.3 ms | ~73× faster |
+
+### GeoJSON Optimisation
+
+Taxi-zone geometries are simplified before they are returned to the browser:
+
+```sql
+ST_SimplifyPreserveTopology(
+    geom,
+    0.0001
+)
+```
+
+| Metric | Before | After |
+|---|---:|---:|
+| GeoJSON response size | ~2.19 MB | ~381 KB |
+| Average response time | ~286 ms | ~134 ms |
+| Payload reduction | — | ~83% |
+| Response-time improvement | — | ~53% |
+
+The selected tolerance reduces payload size while preserving the visual quality and topology of the taxi-zone polygons.
+
+### API Timing Middleware
+
+FastAPI middleware records request duration and adds a response header:
+
+```text
+X-Process-Time-Ms: 51.15
+```
+
+Example log output:
+
+```text
+GET /api/v1/dashboard/summary 200 78.59 ms
+GET /api/v1/zones/geojson 200 141.25 ms
+```
+
+### Weekday–Hour Demand Heatmap
+
+The dashboard includes an interactive 7 × 24 demand matrix:
+
+```text
+7 weekdays × 24 hours = 168 cells
+```
+
+Each cell represents the total taxi demand for one weekday and hour. Hovering over a cell displays:
+
+- weekday,
+- hour,
+- trip count.
+
+The heatmap responds to borough and date filters. Hour and weekday filters are intentionally excluded from the heatmap request so that the complete temporal pattern remains visible.
 
 ## API Endpoints
 
@@ -280,6 +370,7 @@ After the application starts:
 |---|---|---|
 | GET | `/api/v1/dashboard/summary` | Returns filtered dashboard KPIs |
 | GET | `/api/v1/dashboard/daily-trend` | Returns daily trip-demand values |
+| GET | `/api/v1/dashboard/weekday-hour-heatmap` | Returns demand grouped by weekday and hour |
 
 ### Zone Endpoints
 
@@ -433,7 +524,26 @@ Run a specific test module:
 pytest tests/test_zones.py -v
 ```
 
-The current test suite covers system, dashboard, and taxi-zone behaviour.
+The current test suite contains 12 automated tests covering:
+
+- dashboard summary,
+- daily demand trend,
+- weekday–hour heatmap,
+- filter validation,
+- invalid date ranges,
+- borough listing,
+- zone ranking,
+- zone hourly demand,
+- unknown zones,
+- system endpoints.
+
+Current result:
+
+```text
+12 passed
+```
+
+The complete test suite also runs automatically through GitHub Actions.
 
 ## Logging
 
@@ -541,9 +651,9 @@ Benefits:
 - Production deployment configuration is not yet complete.
 - Database migrations are not yet managed by a migration tool.
 - Authentication and authorisation are not implemented.
-- Automated CI/CD is not yet configured.
 - Test coverage reporting is not yet included.
-- Materialized-view refresh automation can be improved.
+- The dashboard is optimised primarily for desktop use.
+- Materialized-view refresh is automated after ETL, but scheduled and concurrent refresh strategies are not yet implemented.
 
 ## Planned Improvements
 
@@ -552,23 +662,21 @@ Benefits:
 - Add `.env.example`
 - Add production-specific Compose configuration
 - Add health checks for all services
-- Add non-root Docker user
 - Pin dependency versions
-- Add GitHub Actions
-- Add automated tests on every push
 - Add coverage reporting
-- Add reverse proxy configuration
+- Add reverse-proxy configuration
 - Add cloud deployment
+- Add release and deployment workflows
 
 ### Data and Performance
 
-- Add database indexes and query analysis
-- Measure endpoint response times
-- Improve materialized-view refresh strategy
+- Add caching for frequently requested dashboard responses
+- Add scheduled or asynchronous ETL jobs
+- Evaluate `REFRESH MATERIALIZED VIEW CONCURRENTLY`
 - Introduce pagination where required
-- Add caching
-- Add larger taxi datasets
-- Add asynchronous or scheduled ETL jobs
+- Add larger and multi-period taxi datasets
+- Add query-performance regression benchmarks
+- Add database migration management
 
 ### Advanced Location Intelligence
 
@@ -580,17 +688,18 @@ Benefits:
 - Taxi-zone segmentation
 - Location scoring
 - Service-area optimisation
+- Heatmap-driven cross-filtering of the map and ranking panels
 
 ### User Experience
 
-- Responsive dashboard improvements
-- Advanced map legends
-- Loading and error states
-- More interactive filters
-- Downloadable reports
-- Layer controls
-- Comparison mode
-- Improved chart interactions
+- Improve mobile and tablet responsiveness
+- Add an advanced map legend
+- Add downloadable reports and data exports
+- Add layer controls
+- Add comparison mode
+- Improve chart interactions
+- Add accessible keyboard interactions
+- Add visual feedback for selected heatmap cells
 
 ## Learning Outcomes
 
@@ -613,6 +722,22 @@ Topics applied in the project include:
 - Docker containerisation,
 - Git and GitHub workflows,
 - technical documentation.
+
+## Sprint 3 Summary
+
+Sprint 3 transformed UrbanFlow from a functional dashboard into a more performant and interactive analytical application.
+
+Completed work includes:
+
+1. moving dashboard analytics to an indexed materialized view,
+2. simplifying GeoJSON geometries with topology preservation,
+3. automating analytical-view refresh after ETL,
+4. measuring API response times,
+5. adding loading and empty states,
+6. improving map navigation and filter feedback,
+7. adding interactive zone-selection controls,
+8. implementing a weekday–hour demand heatmap,
+9. expanding the automated test suite to 12 passing tests.
 
 ## Development Approach
 
