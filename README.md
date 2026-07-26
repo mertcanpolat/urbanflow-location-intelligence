@@ -15,7 +15,7 @@ The project combines spatial ETL, PostgreSQL/PostGIS, a FastAPI backend, and an 
 - FastAPI
 - Leaflet
 - Chart.js
-- Materialized View
+- Materialized view
 - Interactive dashboard
 
 ### Sprint 2 — Software Architecture and Engineering
@@ -27,23 +27,27 @@ The project combines spatial ETL, PostgreSQL/PostGIS, a FastAPI backend, and an 
 - Pytest test suite
 - Dockerfile
 - Docker Compose
-- Git repository
-- GitHub repository
+- Git and GitHub workflow
+- GitHub Actions continuous integration
 - Technical documentation
 
-### Sprint 3 — Performance and Interactive Analytics
+### Sprint 3 — Performance and Advanced Analytics
 
 - Materialized-view query optimisation
 - GeoJSON geometry simplification
 - Automated materialized-view refresh after ETL
 - API response-time middleware
-- Loading and empty states
-- Active-filter summary
+- Loading, error, and empty states
+- Advanced filters and active-filter summaries
 - Borough-based automatic map zoom
 - Interactive taxi-zone selection controls
 - Weekday–hour demand heatmap
-- Expanded automated test coverage
-
+- Dynamic demand classification
+- Adjacency-based spatial hotspot analysis
+- Seven-day baseline demand forecast
+- Weighted 0–100 zone-priority score
+- Three analytical map modes
+- Expanded automated test coverage: **17 passing tests**
 ## Project Objectives
 
 UrbanFlow aims to answer questions such as:
@@ -98,6 +102,7 @@ Main router modules:
 
 - `api/routers/system.py`
 - `api/routers/dashboard.py`
+- `api/routers/forecast.py`
 - `api/routers/zones.py`
 
 ### Service Layer
@@ -107,6 +112,7 @@ The service layer contains application-level logic and coordinates operations be
 Main service modules:
 
 - `api/services/dashboard_service.py`
+- `api/services/forecast_service.py`
 - `api/services/zone_service.py`
 
 ### Repository Layer
@@ -116,6 +122,7 @@ The repository layer is responsible for SQL queries and database access.
 Main repository modules:
 
 - `api/repositories/dashboard_repository.py`
+- `api/repositories/forecast_repository.py`
 - `api/repositories/zone_repository.py`
 
 This separation keeps HTTP handling, business logic, and database operations independent from one another.
@@ -152,6 +159,10 @@ Leaflet map and Chart.js dashboard
 ```text
 urbanflow-location-intelligence/
 │
+├── .github/
+│   └── workflows/
+│       └── tests.yml
+│
 ├── api/
 │   ├── core/
 │   │   ├── exceptions.py
@@ -163,15 +174,18 @@ urbanflow-location-intelligence/
 │   │
 │   ├── repositories/
 │   │   ├── dashboard_repository.py
+│   │   ├── forecast_repository.py
 │   │   └── zone_repository.py
 │   │
 │   ├── routers/
 │   │   ├── dashboard.py
+│   │   ├── forecast.py
 │   │   ├── system.py
 │   │   └── zones.py
 │   │
 │   ├── services/
 │   │   ├── dashboard_service.py
+│   │   ├── forecast_service.py
 │   │   └── zone_service.py
 │   │
 │   ├── database.py
@@ -180,6 +194,13 @@ urbanflow-location-intelligence/
 ├── database/
 │   ├── init/
 │   └── queries/
+│
+├── docs/
+│   └── screenshots/
+│       ├── demand-forecast.png
+│       ├── hotspot-analysis.png
+│       ├── sprint-3-dashboard.png
+│       └── zone-score-map.png
 │
 ├── src/
 │   ├── download_taxi_zones.py
@@ -192,6 +213,7 @@ urbanflow-location-intelligence/
 ├── tests/
 │   ├── conftest.py
 │   ├── test_dashboard.py
+│   ├── test_forecast.py
 │   ├── test_system.py
 │   └── test_zones.py
 │
@@ -203,29 +225,26 @@ urbanflow-location-intelligence/
 ├── .dockerignore
 ├── .gitignore
 ├── Dockerfile
+├── LICENSE
+├── README.md
 ├── compose.yaml
 └── requirements.txt
 ```
-
 ## Screenshots
 
-### Dashboard Overview
+### Sprint 3 Dashboard
 
-![UrbanFlow dashboard overview](docs/screenshots/dashboard-overview.png)
+![UrbanFlow Sprint 3 dashboard](docs/screenshots/sprint-3-dashboard.png)
 
-### Taxi Zone Demand Map
+### Spatial Analytics
 
-![NYC taxi zone demand map](docs/screenshots/taxi-zone-map.png)
+| Hotspot Analysis | Weighted Zone Score |
+|---|---|
+| ![UrbanFlow hotspot analysis](docs/screenshots/hotspot-analysis.png) | ![UrbanFlow weighted zone score](docs/screenshots/zone-score-map.png) |
 
-### Demand Analysis
+### Demand Forecasting and Temporal Analysis
 
-![UrbanFlow demand charts](docs/screenshots/demand-chart.png)
-
-### API Documentation
-
-![FastAPI Swagger documentation](docs/screenshots/swagger-api.png)
-
-
+![UrbanFlow seven-day demand forecast and weekday-hour heatmap](docs/screenshots/demand-forecast.png)
 ## Main Features
 
 ### Spatial Taxi-Zone Map
@@ -264,6 +283,79 @@ The application supports:
 - date filtering,
 - zone-level analysis,
 - coordinated map, KPI, chart, and ranking updates.
+
+### Dynamic Demand Classification
+
+Taxi zones are classified dynamically from the filtered trip distribution using cumulative percentiles. The classes are recalculated whenever borough, hour, weekday, or date filters change.
+
+The map supports five demand levels:
+
+- Very Low
+- Low
+- Medium
+- High
+- Very High
+
+Zones without matching trips are displayed separately as `No Data`.
+
+### Spatial Hotspot Analysis
+
+The hotspot mode combines each zone's filtered demand percentile with the average demand percentile of its touching neighbours.
+
+PostGIS `ST_Touches` is used to build polygon adjacency relationships. Zones are then classified as:
+
+- Hotspot
+- Potential Hotspot
+- Neutral
+- Potential Coldspot
+- Coldspot
+
+This is an explainable adjacency-and-percentile heuristic rather than a formal Getis-Ord Gi* significance test. Statistical hotspot methods are planned for a future sprint.
+
+### Seven-Day Baseline Demand Forecast
+
+The forecasting endpoint predicts the next seven days using the average demand of the last four matching weekdays.
+
+For example, the next Monday forecast is based on the four most recent Mondays. The uncertainty band is calculated as:
+
+```text
+mean ± population standard deviation
+```
+
+The forecast is intentionally implemented as an explainable baseline. It provides a reference model that can later be compared with Holt-Winters, SARIMA, or machine-learning approaches.
+
+### Weighted Zone Score
+
+Each taxi zone receives a weighted score between 0 and 100:
+
+```text
+Zone Score =
+Demand Score × 50%
++ Hotspot Component × 30%
++ Demand Consistency × 20%
+```
+
+The components represent:
+
+- **Demand Score:** filtered trip-demand percentile
+- **Hotspot Component:** the combined zone-and-neighbour spatial class
+- **Demand Consistency:** active days divided by total days in the selected period
+
+Priority classes:
+
+| Score | Priority class |
+|---:|---|
+| 80–100 | Very High |
+| 60–79 | High |
+| 40–59 | Medium |
+| 20–39 | Low |
+| 0–19 | Very Low |
+
+The frontend exposes three analytical map modes:
+
+1. Demand Class
+2. Hotspot Analysis
+3. Zone Score
 
 ### Materialized View
 
@@ -378,9 +470,17 @@ After the application starts:
 |---|---|---|
 | GET | `/api/v1/boroughs` | Returns available borough names |
 | GET | `/api/v1/zones/top` | Returns zones with the highest overall demand |
-| GET | `/api/v1/zones/geojson` | Returns filtered taxi zones as GeoJSON |
+| GET | `/api/v1/zones/geojson` | Returns filtered taxi zones with dynamic demand classes |
+| GET | `/api/v1/zones/hotspots` | Returns adjacency-based spatial hotspot classifications |
+| GET | `/api/v1/zones/scores` | Returns weighted 0–100 zone-priority scores |
 | GET | `/api/v1/zones/ranking` | Returns filtered zone rankings |
 | GET | `/api/v1/zones/{location_id}/hourly` | Returns hourly demand for one taxi zone |
+
+### Forecast Endpoints
+
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/api/v1/forecast/daily-demand` | Returns the seven-day weekday-average baseline forecast |
 
 ## Environment Variables
 
@@ -524,7 +624,7 @@ Run a specific test module:
 pytest tests/test_zones.py -v
 ```
 
-The current test suite contains 12 automated tests covering:
+The current test suite contains **17 automated tests** covering:
 
 - dashboard summary,
 - daily demand trend,
@@ -535,16 +635,19 @@ The current test suite contains 12 automated tests covering:
 - zone ranking,
 - zone hourly demand,
 - unknown zones,
+- adjacency-based hotspot analysis,
+- seven-day demand forecasting,
+- forecast-parameter validation,
+- weighted zone scoring,
 - system endpoints.
 
 Current result:
 
 ```text
-12 passed
+17 passed
 ```
 
 The complete test suite also runs automatically through GitHub Actions.
-
 ## Logging
 
 Application logging is configured centrally in:
@@ -657,6 +760,20 @@ Benefits:
 
 ## Planned Improvements
 
+### Sprint 4 — Decision Support and Advanced Spatial Analytics
+
+- Zone detail panel
+- Multi-zone comparison
+- Demand trend and change analysis
+- Anomaly detection
+- Forecast evaluation with MAE, RMSE, and MAPE
+- Baseline comparison with Holt-Winters and SARIMA
+- Statistical hotspot analysis with Getis-Ord Gi*
+- Global and Local Moran's I
+- LISA cluster mapping
+- Export to CSV, GeoJSON, Excel, and PDF
+- Caching and background refresh strategies
+
 ### Deployment and DevOps
 
 - Add `.env.example`
@@ -680,27 +797,22 @@ Benefits:
 
 ### Advanced Location Intelligence
 
-- Spatiotemporal hotspot analysis
-- Demand clustering
+- Statistical spatiotemporal hotspot analysis
+- Demand clustering and taxi-zone segmentation
 - Origin–destination analysis
 - Accessibility analysis
-- Demand forecasting
-- Taxi-zone segmentation
-- Location scoring
 - Service-area optimisation
-- Heatmap-driven cross-filtering of the map and ranking panels
+- Recommendation and intervention rules
 
 ### User Experience
 
 - Improve mobile and tablet responsiveness
-- Add an advanced map legend
+- Add a zone-detail drawer
 - Add downloadable reports and data exports
-- Add layer controls
 - Add comparison mode
 - Improve chart interactions
 - Add accessible keyboard interactions
-- Add visual feedback for selected heatmap cells
-
+- Add heatmap-driven cross-filtering
 ## Learning Outcomes
 
 This project is designed as a practical GIS software-engineering learning programme.
@@ -725,20 +837,28 @@ Topics applied in the project include:
 
 ## Sprint 3 Summary
 
-Sprint 3 transformed UrbanFlow from a functional dashboard into a more performant and interactive analytical application.
+Sprint 3 transformed UrbanFlow from a functional demand dashboard into a performant spatial analytics and decision-support application.
 
 Completed work includes:
 
-1. moving dashboard analytics to an indexed materialized view,
-2. simplifying GeoJSON geometries with topology preservation,
-3. automating analytical-view refresh after ETL,
-4. measuring API response times,
-5. adding loading and empty states,
-6. improving map navigation and filter feedback,
-7. adding interactive zone-selection controls,
-8. implementing a weekday–hour demand heatmap,
-9. expanding the automated test suite to 12 passing tests.
+1. benchmarking raw-table and materialized-view queries,
+2. moving dashboard analytics to an indexed materialized view,
+3. simplifying GeoJSON geometries while preserving polygon topology,
+4. automatically refreshing the materialized view after ETL,
+5. measuring API response times through middleware,
+6. improving loading, error, and empty states,
+7. adding advanced filters and active-filter feedback,
+8. improving map navigation and interactive zone selection,
+9. implementing a 7 × 24 weekday–hour heatmap,
+10. implementing dynamic percentile-based demand classification,
+11. implementing adjacency-based spatial hotspot analysis,
+12. adding an interactive hotspot map mode,
+13. implementing a seven-day baseline demand forecast,
+14. creating a weighted 0–100 zone-priority score,
+15. adding a third analytical map mode for zone scoring,
+16. expanding the automated test suite to **17 passing tests**.
 
+Sprint 3 established an explainable analytical foundation for Sprint 4, where the project will focus on zone comparison, model evaluation, anomaly detection, statistical spatial analysis, and decision-support recommendations.
 ## Development Approach
 
 UrbanFlow is developed in weekly sprints.
