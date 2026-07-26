@@ -431,6 +431,15 @@ function renderHourlyChart(hourlyData, zoneName) {
         "hourly-demand-chart"
     );
 
+    const emptyState = document.getElementById(
+        "hourly-chart-empty"
+    );
+
+    if (emptyState) {
+        emptyState.hidden = true;
+    }   
+
+canvas.hidden = false;
     const context = canvas.getContext("2d");
 
     if (hourlyDemandChart) {
@@ -761,6 +770,10 @@ async function refreshDashboard() {
         "Haritadan bir bölge seçin"
     );
 
+    clearDailyTrendChart(
+    "Günlük talep verileri yükleniyor..."
+    );
+    
     try {
         const [
             mapHasData,
@@ -940,6 +953,15 @@ function renderDailyDemandChart(dailyData) {
         "daily-demand-chart"
     );
 
+    const emptyState = document.getElementById(
+        "daily-chart-empty"
+    );
+
+    if (emptyState) {
+        emptyState.hidden = true;
+    }
+
+canvas.hidden = false;
     const context = canvas.getContext("2d");
 
     if (dailyDemandChart) {
@@ -1647,40 +1669,57 @@ function clearHourlyChart(
         hourlyDemandChart = null;
     }
 
+    const canvas = document.getElementById(
+        "hourly-demand-chart"
+    );
+
+    const emptyState = document.getElementById(
+        "hourly-chart-empty"
+    );
+
+    if (canvas) {
+        canvas.hidden = true;
+    }
+
+    if (emptyState) {
+        emptyState.textContent = message;
+        emptyState.hidden = false;
+    }
+
     const selectedZoneName =
         document.getElementById(
             "selected-zone-name"
         );
 
     if (selectedZoneName) {
-        selectedZoneName.textContent =
-            message;
+        selectedZoneName.textContent = message;
     }
 }
 
-function clearDailyTrendChart() {
+function clearDailyTrendChart(
+    message = "Seçilen filtreler için günlük talep verisi bulunamadı."
+) {
     if (dailyDemandChart) {
         dailyDemandChart.destroy();
         dailyDemandChart = null;
     }
 
-    const canvas =
-        document.getElementById(
-            "daily-demand-chart"
-        );
+    const canvas = document.getElementById(
+        "daily-demand-chart"
+    );
 
-    if (!canvas) {
-        return;
+    const emptyState = document.getElementById(
+        "daily-chart-empty"
+    );
+
+    if (canvas) {
+        canvas.hidden = true;
     }
 
-    const context = canvas.getContext("2d");
-
-    context.clearRect(
-        0,
-        0,
-        canvas.width,
-        canvas.height
-    );
+    if (emptyState) {
+        emptyState.textContent = message;
+        emptyState.hidden = false;
+    }
 }
 
 function clearZoneRanking(
