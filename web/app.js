@@ -5,7 +5,32 @@ let weekdayHourHeatmapChart;
 let selectedZoneLayer;
 let demandLegend;
 
-let demandBreaks = [0, 0, 0];
+const DEMAND_CLASSES = {
+    0: {
+        label: "Veri Yok",
+        color: "#e5e7eb"
+    },
+    1: {
+        label: "Çok Düşük",
+        color: "#fee2e2"
+    },
+    2: {
+        label: "Düşük",
+        color: "#fca5a5"
+    },
+    3: {
+        label: "Orta",
+        color: "#fb7185"
+    },
+    4: {
+        label: "Yüksek",
+        color: "#ef4444"
+    },
+    5: {
+        label: "Çok Yüksek",
+        color: "#991b1b"
+    }
+};
 
 const DEFAULT_MAP_CENTER = [40.73, -73.93];
 const DEFAULT_MAP_ZOOM = 10;
@@ -35,42 +60,25 @@ L.tileLayer(
 
 createDemandLegend();
 
-function getDemandColor(tripCount) {
-    const count = Number(tripCount || 0);
+function getDemandColor(demandClassId) {
+    const classId = Number(
+        demandClassId || 0
+    );
 
-    const [
-        firstBreak,
-        secondBreak,
-        thirdBreak
-    ] = demandBreaks;
-
-    if (count <= 0) {
-        return "#f3f4f6";
-    }
-
-    if (count > thirdBreak) {
-        return "#991b1b";
-    }
-
-    if (count > secondBreak) {
-        return "#ef4444";
-    }
-
-    if (count > firstBreak) {
-        return "#fca5a5";
-    }
-
-    return "#fee2e2";
+    return (
+        DEMAND_CLASSES[classId]?.color
+        || DEMAND_CLASSES[0].color
+    );
 }
 
 function zoneStyle(feature) {
     return {
         fillColor: getDemandColor(
-            feature.properties.trip_count
+            feature.properties.demand_class_id
         ),
         weight: 1,
         color: "#374151",
-        fillOpacity: 0.7
+        fillOpacity: 0.72
     };
 }
 
@@ -129,20 +137,32 @@ function onEachFeature(feature, layer) {
 
     layer.bindPopup(`
         <strong>${properties.zone_name}</strong><br>
-        Borough: ${properties.borough}<br>
-        Location ID: ${properties.location_id}<br>
+
+        Borough:
+        ${properties.borough}<br>
+
+        Location ID:
+        ${properties.location_id}<br>
+
+        Talep sınıfı:
+        <strong>
+            ${properties.demand_class || "Veri Yok"}
+        </strong><br>
+
         Pickup sayısı:
         ${Number(
-        properties.trip_count || 0
-    ).toLocaleString("tr-TR")}<br>
+            properties.trip_count || 0
+        ).toLocaleString("tr-TR")}<br>
+
         Ortalama mesafe:
         ${formatNullableNumber(
-        properties.avg_trip_distance
-    )}<br>
+            properties.avg_trip_distance
+        )}<br>
+
         Ortalama tutar:
         ${formatNullableNumber(
-        properties.avg_total_amount
-    )}
+            properties.avg_total_amount
+        )}
     `);
 
     layer.on({
@@ -312,7 +332,6 @@ async function loadMapData() {
         return false;
     }
 
-    updateDemandBreaks(geojson);
     updateDemandLegend();
 
     if (geoJsonLayer) {
@@ -1350,152 +1369,7 @@ function getHourlyChartFilterLabel() {
     return `${weekdayText} · ${dateText}`;
 }
 
-function calculateQuantile(sortedValues, quantile) {
-    if (sortedValues.length === 0) {
-        return 0;
-    }
 
-    const position =
-        (sortedValues.length - 1) * quantile;
-
-    const lowerIndex = Math.floor(position);
-    const upperIndex = Math.ceil(position);
-
-    const lowerValue = sortedValues[lowerIndex];
-    const upperValue = sortedValues[upperIndex];
-
-    if (lowerIndex === upperIndex) {
-        return lowerValue;
-    }
-
-    const fraction = position - lowerIndex;
-
-    return (
-        lowerValue
-        + (upperValue - lowerValue) * fraction
-    );
-}
-
-function updateDemandBreaks(geojson) {
-    const values = geojson.features
-        .map((feature) =>
-            Number(
-                feature.properties.trip_count || 0
-            )
-        )
-        .filter((value) => value > 0)
-        .sort((a, b) => a - b);
-
-    if (values.length === 0) {
-        demandBreaks = [0, 0, 0];
-        return;
-    }
-
-    demandBreaks = [
-        calculateQuantile(values, 0.25),
-        calculateQuantile(values, 0.50),
-        calculateQuantile(values, 0.75)
-    ];
-
-    console.log(
-        "Dinamik talep eşikleri:",
-        demandBreaks
-    );
-}
-
-function formatLegendNumber(value) {
-    return Math.round(Number(value || 0))
-        .toLocaleString("tr-TR");
-}
-
-function getDemandLegendRanges() {
-    const [
-        rawFirstBreak,
-        rawSecondBreak,
-        rawThirdBreak
-    ] = demandBreaks;
-
-    const firstBreak = Math.round(
-        Number(rawFirstBreak || 0)
-    );
-
-    const secondBreak = Math.round(
-        Number(rawSecondBreak || 0)
-    );
-
-    const thirdBreak = Math.round(
-        Number(rawThirdBreak || 0)
-    );
-
-    if (
-        firstBreak === 0
-        && secondBreak === 0
-        && thirdBreak === 0
-    ) {
-        return [];
-    }
-
-    const ranges = [
-        {
-            color: "#fee2e2",
-            minimum: 1,
-            maximum: firstBreak
-        },
-        {
-            color: "#fca5a5",
-            minimum: firstBreak + 1,
-            maximum: secondBreak
-        },
-        {
-            color: "#ef4444",
-            minimum: secondBreak + 1,
-            maximum: thirdBreak
-        },
-        {
-            color: "#991b1b",
-            minimum: thirdBreak + 1,
-            maximum: null
-        }
-    ];
-
-    return ranges
-        .filter((range) => {
-            if (range.maximum === null) {
-                return true;
-            }
-
-            return range.minimum <= range.maximum;
-        })
-        .map((range) => {
-            let label;
-
-            if (range.maximum === null) {
-                label =
-                    `${formatLegendNumber(
-                        range.minimum
-                    )}+`;
-            } else {
-                label =
-                    `${formatLegendNumber(
-                        range.minimum
-                    )} – `
-                    + `${formatLegendNumber(
-                        range.maximum
-                    )}`;
-            }
-
-            return {
-                color: range.color,
-                label
-            };
-        })
-        .concat([
-            {
-                color: "#f3f4f6",
-                label: "Veri yok"
-            }
-        ]);
-}
 
 function createDemandLegend() {
     demandLegend = L.control({
@@ -1510,7 +1384,7 @@ function createDemandLegend() {
 
         container.innerHTML = `
             <div class="demand-legend-title">
-                Yolculuk sayısı
+                Talep sınıfı
             </div>
 
             <div
@@ -1539,28 +1413,25 @@ function updateDemandLegend() {
         return;
     }
 
-    const ranges = getDemandLegendRanges();
+    const classes = [
+        DEMAND_CLASSES[5],
+        DEMAND_CLASSES[4],
+        DEMAND_CLASSES[3],
+        DEMAND_CLASSES[2],
+        DEMAND_CLASSES[1],
+        DEMAND_CLASSES[0]
+    ];
 
-    if (ranges.length === 0) {
-        legendContent.innerHTML = `
-            <div class="demand-legend-empty">
-                Gösterilecek veri yok
-            </div>
-        `;
-
-        return;
-    }
-
-    legendContent.innerHTML = ranges
-        .map((range) => `
+    legendContent.innerHTML = classes
+        .map((item) => `
             <div class="demand-legend-item">
                 <span
                     class="demand-legend-color"
-                    style="background:${range.color}"
+                    style="background:${item.color}"
                 ></span>
 
                 <span>
-                    ${range.label}
+                    ${item.label}
                 </span>
             </div>
         `)
@@ -1673,8 +1544,6 @@ function clearMapData() {
     }
 
     zoneLayersById.clear();
-
-    demandBreaks = [0, 0, 0];
 
     updateDemandLegend();
 }

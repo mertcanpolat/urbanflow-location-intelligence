@@ -28,7 +28,7 @@ class WeekdayHourHeatmapItem(BaseModel):
     weekday: int
     pickup_hour: int
     trip_count: int
-    
+
 class ZoneRankingItem(BaseModel):
     location_id: int
     zone_name: str
@@ -44,7 +44,6 @@ class HourlyDemandItem(BaseModel):
     avg_total_amount: float | None
 
 
-
 class ZoneProperties(BaseModel):
     location_id: int
     zone_name: str
@@ -52,7 +51,8 @@ class ZoneProperties(BaseModel):
     trip_count: int
     avg_total_amount: float | None
     avg_trip_distance: float | None
-
+    demand_class_id: int
+    demand_class: str
 
 class GeoJSONGeometry(BaseModel):
     type: str

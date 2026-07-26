@@ -111,61 +111,108 @@ def fetch_zones_geojson(
         """
         WITH demand AS (
             SELECT
+                d.location_id,
+
+            SUM(
+                d.trip_count
+            )::bigint AS trip_count,
+
+            ROUND(
+                (
+                    SUM(d.total_amount)
+                    / NULLIF(SUM(d.trip_count), 0)
+                )::numeric,
+                2
+            ) AS avg_total_amount,
+
+            ROUND(
+                (
+                    SUM(
+                        d.avg_trip_distance
+                        * d.trip_count
+                    )
+                    / NULLIF(SUM(d.trip_count), 0)
+                )::numeric,
+                2
+            ) AS avg_trip_distance
+
+        FROM analytics.zone_hourly_demand AS d
+
+        JOIN core.taxi_zones AS z
+            ON d.location_id = z.location_id
+
+        WHERE (
+            CAST(:borough AS VARCHAR) IS NULL
+            OR z.borough = CAST(:borough AS VARCHAR)
+        )
+        AND (
+            CAST(:hour AS SMALLINT) IS NULL
+            OR d.pickup_hour = CAST(:hour AS SMALLINT)
+        )
+        AND (
+            CAST(:weekday AS SMALLINT) IS NULL
+            OR EXTRACT(ISODOW FROM d.pickup_date)
+                = CAST(:weekday AS SMALLINT)
+        )
+        AND (
+            CAST(:date_from AS DATE) IS NULL
+            OR d.pickup_date >= CAST(:date_from AS DATE)
+        )
+        AND (
+            CAST(:date_to AS DATE) IS NULL
+            OR d.pickup_date <= CAST(:date_to AS DATE)
+        )
+
+        GROUP BY d.location_id
+    ),
+
+        classified_demand AS (
+            SELECT
                 location_id,
-                SUM(trip_count)::bigint AS trip_count,
+                trip_count,
+                avg_total_amount,
+                avg_trip_distance,
 
-                ROUND(
-                    (
-                        SUM(total_amount)
-                        / NULLIF(SUM(trip_count), 0)
-                    )::numeric,
-                    2
-                ) AS avg_total_amount,
+                CUME_DIST() OVER (
+                    ORDER BY trip_count
+                ) AS demand_percentile
 
-                ROUND(
-                    (
-                        SUM(
-                            avg_trip_distance
-                            * trip_count
-                        )
-                        / NULLIF(SUM(trip_count), 0)
-                    )::numeric,
-                    2
-                ) AS avg_trip_distance
+            FROM demand
 
-            FROM analytics.zone_hourly_demand
-
-            WHERE (
-                CAST(:hour AS SMALLINT) IS NULL
-                OR pickup_hour = CAST(:hour AS SMALLINT)
-            )
-            AND (
-                CAST(:weekday AS SMALLINT) IS NULL
-                OR EXTRACT(ISODOW FROM pickup_date)
-                    = CAST(:weekday AS SMALLINT)
-            )
-            AND (
-                CAST(:date_from AS DATE) IS NULL
-                OR pickup_date >= CAST(:date_from AS DATE)
-            )
-            AND (
-                CAST(:date_to AS DATE) IS NULL
-                OR pickup_date <= CAST(:date_to AS DATE)
-            )
-
-            GROUP BY location_id
+            WHERE trip_count > 0
         )
 
         SELECT
             z.location_id,
             z.zone_name,
             z.borough,
+
             COALESCE(
                 d.trip_count,
                 0
             )::bigint AS trip_count,
+
             d.avg_total_amount,
             d.avg_trip_distance,
+
+            CASE
+                WHEN d.location_id IS NULL THEN 0
+                WHEN d.demand_percentile <= 0.20 THEN 1
+                WHEN d.demand_percentile <= 0.40 THEN 2
+                WHEN d.demand_percentile <= 0.60 THEN 3
+                WHEN d.demand_percentile <= 0.80 THEN 4
+                ELSE 5
+            END::smallint AS demand_class_id,
+
+            CASE
+                WHEN d.location_id IS NULL THEN 'Veri Yok'
+                WHEN d.demand_percentile <= 0.20 THEN 'Çok Düşük'
+                WHEN d.demand_percentile <= 0.40 THEN 'Düşük'
+                WHEN d.demand_percentile <= 0.60 THEN 'Orta'
+                WHEN d.demand_percentile <= 0.80 THEN 'Yüksek'
+                ELSE 'Çok Yüksek'
+            END AS demand_class,
+
             ST_AsGeoJSON(
                 ST_SimplifyPreserveTopology(
                     z.geom,
@@ -176,7 +223,7 @@ def fetch_zones_geojson(
 
         FROM core.taxi_zones AS z
 
-        LEFT JOIN demand AS d
+        LEFT JOIN classified_demand AS d
             ON z.location_id = d.location_id
 
         WHERE (
@@ -209,6 +256,8 @@ def fetch_zones_geojson(
                 "trip_count": row["trip_count"],
                 "avg_total_amount": row["avg_total_amount"],
                 "avg_trip_distance": row["avg_trip_distance"],
+                "demand_class_id": row["demand_class_id"],
+                "demand_class": row["demand_class"],
             },
         }
         for row in rows
