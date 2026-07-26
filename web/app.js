@@ -32,6 +32,29 @@ const DEMAND_CLASSES = {
     }
 };
 
+const HOTSPOT_CLASSES = {
+    "-2": {
+        label: "Coldspot",
+        color: "#1d4ed8"
+    },
+    "-1": {
+        label: "Potansiyel Coldspot",
+        color: "#93c5fd"
+    },
+    "0": {
+        label: "Nötr",
+        color: "#e5e7eb"
+    },
+    "1": {
+        label: "Potansiyel Hotspot",
+        color: "#fca5a5"
+    },
+    "2": {
+        label: "Hotspot",
+        color: "#b91c1c"
+    }
+};
+
 const DEFAULT_MAP_CENTER = [40.73, -73.93];
 const DEFAULT_MAP_ZOOM = 10;
 const zoneLayersById = new Map();
@@ -60,6 +83,14 @@ L.tileLayer(
 
 createDemandLegend();
 
+function getMapMode() {
+    const select = document.getElementById(
+        "map-mode-filter"
+    );
+
+    return select?.value || "demand";
+}
+
 function getDemandColor(demandClassId) {
     const classId = Number(
         demandClassId || 0
@@ -71,11 +102,32 @@ function getDemandColor(demandClassId) {
     );
 }
 
+function getHotspotColor(hotspotScore) {
+    const score = String(
+        Number(hotspotScore || 0)
+    );
+
+    return (
+        HOTSPOT_CLASSES[score]?.color
+        || HOTSPOT_CLASSES["0"].color
+    );
+}
+
 function zoneStyle(feature) {
+    const properties =
+        feature.properties || {};
+
+    const fillColor =
+        getMapMode() === "hotspot"
+            ? getHotspotColor(
+                properties.hotspot_score
+            )
+            : getDemandColor(
+                properties.demand_class_id
+            );
+
     return {
-        fillColor: getDemandColor(
-            feature.properties.demand_class_id
-        ),
+        fillColor,
         weight: 1,
         color: "#374151",
         fillOpacity: 0.72
@@ -128,14 +180,8 @@ function formatNullableNumber(value, digits = 2) {
     );
 }
 
-function onEachFeature(feature, layer) {
-    const properties = feature.properties;
-    zoneLayersById.set(
-        Number(properties.location_id),
-        layer
-    );
-
-    layer.bindPopup(`
+function buildDemandPopup(properties) {
+    return `
         <strong>${properties.zone_name}</strong><br>
 
         Borough:
@@ -151,19 +197,68 @@ function onEachFeature(feature, layer) {
 
         Pickup sayısı:
         ${Number(
-            properties.trip_count || 0
-        ).toLocaleString("tr-TR")}<br>
+        properties.trip_count || 0
+    ).toLocaleString("tr-TR")}<br>
 
         Ortalama mesafe:
         ${formatNullableNumber(
-            properties.avg_trip_distance
-        )}<br>
+        properties.avg_trip_distance
+    )}<br>
 
         Ortalama tutar:
         ${formatNullableNumber(
-            properties.avg_total_amount
-        )}
-    `);
+        properties.avg_total_amount
+    )}
+    `;
+}
+
+function buildHotspotPopup(properties) {
+    return `
+        <strong>${properties.zone_name}</strong><br>
+
+        Borough:
+        ${properties.borough}<br>
+
+        Location ID:
+        ${properties.location_id}<br>
+
+        Hotspot sınıfı:
+        <strong>
+            ${properties.hotspot_class || "Nötr"}
+        </strong><br>
+
+        Pickup sayısı:
+        ${Number(
+        properties.trip_count || 0
+    ).toLocaleString("tr-TR")}<br>
+
+        Komşu zone sayısı:
+        ${Number(
+        properties.neighbour_count || 0
+    ).toLocaleString("tr-TR")}<br>
+
+        Komşu ortalama talebi:
+        ${Number(
+        properties.neighbour_avg_trip_count || 0
+    ).toLocaleString("tr-TR", {
+        maximumFractionDigits: 2
+    })}
+    `;
+}
+
+function onEachFeature(feature, layer) {
+    const properties = feature.properties;
+    zoneLayersById.set(
+        Number(properties.location_id),
+        layer
+    );
+
+    const popupContent =
+        getMapMode() === "hotspot"
+            ? buildHotspotPopup(properties)
+            : buildDemandPopup(properties);
+
+    layer.bindPopup(popupContent);
 
     layer.on({
         mouseover: highlightFeature,
@@ -203,30 +298,13 @@ function onEachFeature(feature, layer) {
     });
 }
 
-function buildGeoJsonUrl() {
-    const borough = document
-        .getElementById("borough-filter")
-        .value;
+function buildMapDataUrl() {
+    const endpoint =
+        getMapMode() === "hotspot"
+            ? "/api/v1/zones/hotspots"
+            : "/api/v1/zones/geojson";
 
-    const hour = document
-        .getElementById("hour-filter")
-        .value;
-
-    const parameters = new URLSearchParams();
-
-    if (borough) {
-        parameters.set("borough", borough);
-    }
-
-    if (hour !== "") {
-        parameters.set("hour", hour);
-    }
-
-    const queryString = parameters.toString();
-
-    return queryString
-        ? `/api/v1/zones/geojson?${queryString}`
-        : "/api/v1/zones/geojson";
+    return buildFilteredApiUrl(endpoint);
 }
 
 async function loadBoroughs() {
@@ -309,9 +387,7 @@ function updateMapView() {
 
 async function loadMapData() {
     const geojson = await fetchJson(
-        buildFilteredApiUrl(
-            "/api/v1/zones/geojson"
-        )
+        buildMapDataUrl()
     );
 
     const features = Array.isArray(
@@ -352,19 +428,33 @@ async function loadMapData() {
         map.invalidateSize();
         updateMapView();
     }, 100);
-    
+
     return true;
+}
+
+const mapModeFilter =
+    document.getElementById(
+        "map-mode-filter"
+    );
+
+if (mapModeFilter) {
+    mapModeFilter.addEventListener(
+        "change",
+        () => {
+            refreshDashboard();
+        }
+    );
 }
 
 document
     .getElementById("apply-filters")
     .addEventListener("click", () => {
-    if (!validateDateFilters()) {
-        return;
-    }
+        if (!validateDateFilters()) {
+            return;
+        }
 
-    refreshDashboard();
-});
+        refreshDashboard();
+    });
 
 document
     .getElementById("reset-filters")
@@ -388,6 +478,10 @@ document
         document.getElementById(
             "date-to-filter"
         ).value = "";
+
+        document.getElementById(
+            "map-mode-filter"
+        ).value = "demand";
 
         refreshDashboard();
     });
@@ -467,9 +561,9 @@ function renderHourlyChart(hourlyData, zoneName) {
 
     if (emptyState) {
         emptyState.hidden = true;
-    }   
+    }
 
-canvas.hidden = false;
+    canvas.hidden = false;
     const context = canvas.getContext("2d");
 
     if (hourlyDemandChart) {
@@ -801,7 +895,7 @@ async function refreshDashboard() {
     );
 
     clearDailyTrendChart(
-    "Günlük talep verileri yükleniyor..."
+        "Günlük talep verileri yükleniyor..."
     );
 
     clearWeekdayHourHeatmap(
@@ -858,7 +952,7 @@ async function refreshDashboard() {
 
         setDashboardStatus(
             error.message
-                || "Veriler yüklenirken hata oluştu.",
+            || "Veriler yüklenirken hata oluştu.",
             "error"
         );
     } finally {
@@ -998,7 +1092,7 @@ function renderDailyDemandChart(dailyData) {
         emptyState.hidden = true;
     }
 
-canvas.hidden = false;
+    canvas.hidden = false;
     const context = canvas.getContext("2d");
 
     if (dailyDemandChart) {
@@ -1215,6 +1309,11 @@ function formatFilterDate(dateValue) {
 }
 
 function updateActiveFilterSummary() {
+    const mapModeSelect =
+        document.getElementById(
+            "map-mode-filter"
+        );
+
     const boroughSelect =
         document.getElementById(
             "borough-filter"
@@ -1241,6 +1340,12 @@ function updateActiveFilterSummary() {
         ).value;
 
     const activeFilters = [];
+
+    if (mapModeSelect.value === "hotspot") {
+        activeFilters.push(
+            "Hotspot Analizi"
+        );
+    }
 
     if (boroughSelect.value) {
         activeFilters.push(
@@ -1383,7 +1488,10 @@ function createDemandLegend() {
         );
 
         container.innerHTML = `
-            <div class="demand-legend-title">
+            <div
+                id="map-legend-title"
+                class="demand-legend-title"
+            >
                 Talep sınıfı
             </div>
 
@@ -1404,6 +1512,11 @@ function createDemandLegend() {
 }
 
 function updateDemandLegend() {
+    const legendTitle =
+        document.getElementById(
+            "map-legend-title"
+        );
+
     const legendContent =
         document.getElementById(
             "demand-legend-content"
@@ -1413,14 +1526,31 @@ function updateDemandLegend() {
         return;
     }
 
-    const classes = [
-        DEMAND_CLASSES[5],
-        DEMAND_CLASSES[4],
-        DEMAND_CLASSES[3],
-        DEMAND_CLASSES[2],
-        DEMAND_CLASSES[1],
-        DEMAND_CLASSES[0]
-    ];
+    const isHotspot =
+        getMapMode() === "hotspot";
+
+    if (legendTitle) {
+        legendTitle.textContent = isHotspot
+            ? "Hotspot analizi"
+            : "Talep sınıfı";
+    }
+
+    const classes = isHotspot
+        ? [
+            HOTSPOT_CLASSES["2"],
+            HOTSPOT_CLASSES["1"],
+            HOTSPOT_CLASSES["0"],
+            HOTSPOT_CLASSES["-1"],
+            HOTSPOT_CLASSES["-2"]
+        ]
+        : [
+            DEMAND_CLASSES[5],
+            DEMAND_CLASSES[4],
+            DEMAND_CLASSES[3],
+            DEMAND_CLASSES[2],
+            DEMAND_CLASSES[1],
+            DEMAND_CLASSES[0]
+        ];
 
     legendContent.innerHTML = classes
         .map((item) => `

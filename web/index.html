@@ -4,22 +4,13 @@
 <head>
     <meta charset="UTF-8">
 
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1.0"
-    >
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
     <title>UrbanFlow Location Intelligence</title>
 
-    <link
-        rel="stylesheet"
-        href="https://unpkg.com/leaflet/dist/leaflet.css"
-    >
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
 
-    <link
-        rel="stylesheet"
-        href="/static/styles.css"
-    >
+    <link rel="stylesheet" href="/static/styles.css">
 </head>
 
 <body>
@@ -29,27 +20,16 @@
             <p>NYC Yellow Taxi talep haritası</p>
         </div>
 
-        <div
-            id="status"
-            class="status"
-        >
+        <div id="status" class="status">
             Veri yükleniyor...
         </div>
     </header>
 
     <main>
-        <div
-            id="dashboard-loading-overlay"
-            class="dashboard-loading-overlay"
-            role="status"
-            aria-live="polite"
-            aria-hidden="true"
-        >
+        <div id="dashboard-loading-overlay" class="dashboard-loading-overlay" role="status" aria-live="polite"
+            aria-hidden="true">
             <div class="dashboard-loading-card">
-                <div
-                    class="loading-spinner"
-                    aria-hidden="true"
-                ></div>
+                <div class="loading-spinner" aria-hidden="true"></div>
 
                 <div>
                     <strong>Veriler hazırlanıyor</strong>
@@ -71,7 +51,19 @@
 
             <div class="filter-panel">
                 <h3>Filtreler</h3>
+                <label for="map-mode-filter">
+                    Harita görünümü
+                </label>
 
+                <select id="map-mode-filter">
+                    <option value="demand">
+                        Talep Sınıfı
+                    </option>
+
+                    <option value="hotspot">
+                        Hotspot Analizi
+                    </option>
+                </select>
                 <label for="borough-filter">
                     Borough
                 </label>
@@ -107,40 +99,23 @@
                     Başlangıç tarihi
                 </label>
 
-                <input
-                    id="date-from-filter"
-                    type="date"
-                >
+                <input id="date-from-filter" type="date">
 
                 <label for="date-to-filter">
                     Bitiş tarihi
                 </label>
 
-                <input
-                    id="date-to-filter"
-                    type="date"
-                >
+                <input id="date-to-filter" type="date">
 
-                <button
-                    id="apply-filters"
-                    type="button"
-                >
+                <button id="apply-filters" type="button">
                     Filtreleri Uygula
                 </button>
 
-                <button
-                    id="reset-filters"
-                    class="secondary-button"
-                    type="button"
-                >
+                <button id="reset-filters" class="secondary-button" type="button">
                     Temizle
                 </button>
 
-                <div
-                    id="active-filter-summary"
-                    class="active-filter-summary"
-                    aria-live="polite"
-                >
+                <div id="active-filter-summary" class="active-filter-summary" aria-live="polite">
                     <span class="active-filter-label">
                         Aktif filtreler:
                     </span>
@@ -183,28 +158,17 @@
                         </span>
                     </div>
 
-                    <button
-                        id="clear-zone-selection"
-                        class="clear-zone-selection"
-                        type="button"
-                        hidden
-                    >
+                    <button id="clear-zone-selection" class="clear-zone-selection" type="button" hidden>
                         Seçimi Temizle
                     </button>
                 </div>
 
                 <div class="chart-container">
-                    <div
-                        id="hourly-chart-empty"
-                        class="chart-empty-state"
-                    >
+                    <div id="hourly-chart-empty" class="chart-empty-state">
                         Haritadan bir bölge seçin
                     </div>
 
-                    <canvas
-                        id="hourly-demand-chart"
-                        hidden
-                    ></canvas>
+                    <canvas id="hourly-demand-chart" hidden></canvas>
                 </div>
             </div>
 
@@ -220,17 +184,11 @@
                 </div>
 
                 <div class="chart-container daily-chart-container">
-                    <div
-                        id="daily-chart-empty"
-                        class="chart-empty-state"
-                    >
+                    <div id="daily-chart-empty" class="chart-empty-state">
                         Günlük talep verileri yükleniyor...
                     </div>
 
-                    <canvas
-                        id="daily-demand-chart"
-                        hidden
-                    ></canvas>
+                    <canvas id="daily-demand-chart" hidden></canvas>
                 </div>
             </div>
 
@@ -246,17 +204,11 @@
                 </div>
 
                 <div class="chart-container heatmap-chart-container">
-                    <div
-                        id="weekday-hour-heatmap-empty"
-                        class="chart-empty-state"
-                    >
+                    <div id="weekday-hour-heatmap-empty" class="chart-empty-state">
                         Isı haritası yükleniyor...
                     </div>
 
-                    <canvas
-                        id="weekday-hour-heatmap-chart"
-                        hidden
-                    ></canvas>
+                    <canvas id="weekday-hour-heatmap-chart" hidden></canvas>
                 </div>
             </div>
 
@@ -269,10 +221,7 @@
                     </span>
                 </div>
 
-                <div
-                    id="zone-ranking"
-                    class="zone-ranking"
-                >
+                <div id="zone-ranking" class="zone-ranking">
                     <p class="ranking-message">
                         Sıralama yükleniyor...
                     </p>

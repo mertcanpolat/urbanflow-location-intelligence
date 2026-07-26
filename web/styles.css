@@ -717,3 +717,10 @@ main {
         justify-self: start;
     }
 }
+
+#map-mode-filter {
+    border-color: #94a3b8;
+    background: #f8fafc;
+    color: #0f172a;
+    font-weight: 600;
+}
