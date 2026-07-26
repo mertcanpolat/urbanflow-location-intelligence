@@ -1,6 +1,7 @@
 let geoJsonLayer;
 let hourlyDemandChart;
 let dailyDemandChart;
+let weekdayHourHeatmapChart;
 let selectedZoneLayer;
 let demandLegend;
 
@@ -14,6 +15,16 @@ const map = L.map("map").setView(
     DEFAULT_MAP_CENTER,
     DEFAULT_MAP_ZOOM
 );
+
+const WEEKDAY_LABELS = {
+    1: "Pazartesi",
+    2: "Salı",
+    3: "Çarşamba",
+    4: "Perşembe",
+    5: "Cuma",
+    6: "Cumartesi",
+    7: "Pazar"
+};
 
 L.tileLayer(
     "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
@@ -773,16 +784,22 @@ async function refreshDashboard() {
     clearDailyTrendChart(
     "Günlük talep verileri yükleniyor..."
     );
-    
+
+    clearWeekdayHourHeatmap(
+        "Isı haritası yükleniyor..."
+    );
+
     try {
         const [
             mapHasData,
             summaryHasData,
-            trendHasData
+            trendHasData,
+            heatmapHasData
         ] = await Promise.all([
             loadMapData(),
             loadDashboardSummary(),
-            loadDailyTrend()
+            loadDailyTrend(),
+            loadWeekdayHourHeatmap()
         ]);
 
         const rankingHasData =
@@ -792,6 +809,7 @@ async function refreshDashboard() {
             mapHasData
             || summaryHasData
             || trendHasData
+            || heatmapHasData
             || rankingHasData;
 
         if (!dashboardHasData) {
@@ -1744,11 +1762,12 @@ function clearZoneRanking(
 function clearDashboardData(
     message = "Seçilen filtreler için veri bulunamadı."
 ) {
-    clearDashboardSummary();
     clearMapData();
-    clearHourlyChart(message);
-    clearDailyTrendChart();
+    clearSummaryCards();
+    clearDailyTrendChart(message);
+    clearWeekdayHourHeatmap(message);
     clearZoneRanking(message);
+    resetHourlySelection();
 }
 
 function setElementText(id, value) {
@@ -1772,3 +1791,305 @@ window.addEventListener("resize", () => {
             map.invalidateSize();
         }, 150);
 });
+
+function buildWeekdayHourHeatmapUrl() {
+    const parameters =
+        getDashboardFilterParameters();
+
+    parameters.delete("hour");
+    parameters.delete("weekday");
+
+    const queryString = parameters.toString();
+
+    const endpoint =
+        "/api/v1/dashboard/weekday-hour-heatmap";
+
+    return queryString
+        ? `${endpoint}?${queryString}`
+        : endpoint;
+}
+
+function normalizeWeekdayHourHeatmap(data) {
+    const demandByCell = new Map();
+
+    for (const item of data) {
+        const key =
+            `${Number(item.weekday)}-${Number(item.pickup_hour)}`;
+
+        demandByCell.set(
+            key,
+            Number(item.trip_count || 0)
+        );
+    }
+
+    const cells = [];
+
+    for (let weekday = 1; weekday <= 7; weekday += 1) {
+        for (let hour = 0; hour <= 23; hour += 1) {
+            const key = `${weekday}-${hour}`;
+
+            cells.push({
+                x: hour,
+                y: weekday,
+                v: demandByCell.get(key) || 0
+            });
+        }
+    }
+
+    return cells;
+}
+
+function getHeatmapColor(value, maximumValue) {
+    if (maximumValue <= 0 || value <= 0) {
+        return "rgba(241, 245, 249, 1)";
+    }
+
+    const intensity = value / maximumValue;
+
+    if (intensity >= 0.75) {
+        return "rgba(153, 27, 27, 0.95)";
+    }
+
+    if (intensity >= 0.50) {
+        return "rgba(239, 68, 68, 0.88)";
+    }
+
+    if (intensity >= 0.25) {
+        return "rgba(252, 165, 165, 0.88)";
+    }
+
+    return "rgba(254, 226, 226, 0.92)";
+}
+
+function renderWeekdayHourHeatmap(data) {
+    const canvas = document.getElementById(
+        "weekday-hour-heatmap-chart"
+    );
+
+    const emptyState = document.getElementById(
+        "weekday-hour-heatmap-empty"
+    );
+
+    if (!canvas) {
+        return;
+    }
+
+    const normalized =
+        normalizeWeekdayHourHeatmap(data);
+
+    const maximumValue = Math.max(
+        ...normalized.map((item) => item.v),
+        0
+    );
+
+    if (maximumValue <= 0) {
+        clearWeekdayHourHeatmap();
+        return;
+    }
+
+    if (emptyState) {
+        emptyState.hidden = true;
+    }
+
+    canvas.hidden = false;
+
+    if (weekdayHourHeatmapChart) {
+        weekdayHourHeatmapChart.destroy();
+    }
+
+    const context = canvas.getContext("2d");
+
+    weekdayHourHeatmapChart = new Chart(
+        context,
+        {
+            type: "matrix",
+
+            data: {
+                datasets: [
+                    {
+                        label: "Yolculuk sayısı",
+                        data: normalized,
+
+                        backgroundColor(context) {
+                            const value =
+                                context.raw?.v || 0;
+
+                            return getHeatmapColor(
+                                value,
+                                maximumValue
+                            );
+                        },
+
+                        borderColor: "#ffffff",
+                        borderWidth: 1,
+
+                        width(context) {
+                            const chartArea =
+                                context.chart.chartArea;
+
+                            if (!chartArea) {
+                                return 10;
+                            }
+
+                            return (
+                                chartArea.width / 24
+                            ) - 1;
+                        },
+
+                        height(context) {
+                            const chartArea =
+                                context.chart.chartArea;
+
+                            if (!chartArea) {
+                                return 10;
+                            }
+
+                            return (
+                                chartArea.height / 7
+                            ) - 1;
+                        }
+                    }
+                ]
+            },
+
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+
+                plugins: {
+                    legend: {
+                        display: false
+                    },
+
+                    tooltip: {
+                        callbacks: {
+                            title(items) {
+                                const item =
+                                    items[0].raw;
+
+                                return (
+                                    WEEKDAY_LABELS[item.y]
+                                    + " · "
+                                    + `${String(item.x).padStart(2, "0")}:00`
+                                );
+                            },
+
+                            label(context) {
+                                return (
+                                    "Yolculuk: "
+                                    + Number(
+                                        context.raw.v
+                                    ).toLocaleString("tr-TR")
+                                );
+                            }
+                        }
+                    }
+                },
+
+                scales: {
+                    x: {
+                        type: "linear",
+                        min: -0.5,
+                        max: 23.5,
+                        offset: false,
+
+                        ticks: {
+                            stepSize: 1,
+
+                            callback(value) {
+                                return Number.isInteger(value)
+                                    ? String(value).padStart(2, "0")
+                                    : "";
+                            }
+                        },
+
+                        grid: {
+                            display: false
+                        },
+
+                        title: {
+                            display: true,
+                            text: "Saat"
+                        }
+                    },
+
+                    y: {
+                        type: "linear",
+                        min: 0.5,
+                        max: 7.5,
+                        reverse: true,
+
+                        ticks: {
+                            stepSize: 1,
+
+                            callback(value) {
+                                return (
+                                    WEEKDAY_LABELS[value]
+                                    || ""
+                                );
+                            }
+                        },
+
+                        grid: {
+                            display: false
+                        }
+                    }
+                }
+            }
+        }
+    );
+}
+
+async function loadWeekdayHourHeatmap() {
+    const data = await fetchJson(
+        buildWeekdayHourHeatmapUrl()
+    );
+
+    if (
+        !Array.isArray(data)
+        || data.length === 0
+    ) {
+        clearWeekdayHourHeatmap();
+        return false;
+    }
+
+    const hasDemand = data.some(
+        (item) =>
+            Number(item.trip_count || 0) > 0
+    );
+
+    if (!hasDemand) {
+        clearWeekdayHourHeatmap();
+        return false;
+    }
+
+    renderWeekdayHourHeatmap(data);
+
+    return true;
+}
+
+function clearWeekdayHourHeatmap(
+    message = "Seçilen filtreler için gün–saat talep verisi bulunamadı."
+) {
+    if (weekdayHourHeatmapChart) {
+        weekdayHourHeatmapChart.destroy();
+        weekdayHourHeatmapChart = null;
+    }
+
+    const canvas = document.getElementById(
+        "weekday-hour-heatmap-chart"
+    );
+
+    const emptyState = document.getElementById(
+        "weekday-hour-heatmap-empty"
+    );
+
+    if (canvas) {
+        canvas.hidden = true;
+    }
+
+    if (emptyState) {
+        emptyState.textContent = message;
+        emptyState.hidden = false;
+    }
+}
