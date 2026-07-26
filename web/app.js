@@ -147,6 +147,14 @@ function onEachFeature(feature, layer) {
             }
 
             selectedZoneLayer = layer;
+            const clearSelectionButton =
+                document.getElementById(
+                    "clear-zone-selection"
+                );
+
+            if (clearSelectionButton) {
+                clearSelectionButton.hidden = false;
+            }
 
             layer.setStyle({
                 weight: 4,
@@ -353,6 +361,20 @@ document
 
         refreshDashboard();
     });
+
+const clearZoneSelectionButton =
+    document.getElementById(
+        "clear-zone-selection"
+    );
+
+if (clearZoneSelectionButton) {
+    clearZoneSelectionButton.addEventListener(
+        "click",
+        () => {
+            resetHourlySelection();
+        }
+    );
+}
 
 async function initializeApplication() {
     try {
@@ -583,6 +605,15 @@ function selectZoneLayer(locationId) {
 
     selectedZoneLayer = layer;
 
+    const clearSelectionButton =
+        document.getElementById(
+            "clear-zone-selection"
+        );
+
+    if (clearSelectionButton) {
+        clearSelectionButton.hidden = false;
+    }
+
     layer.setStyle({
         weight: 4,
         color: "#111827",
@@ -686,17 +717,29 @@ async function loadZoneRanking() {
 }
 
 function resetHourlySelection() {
+    if (
+        selectedZoneLayer
+        && geoJsonLayer
+    ) {
+        geoJsonLayer.resetStyle(
+            selectedZoneLayer
+        );
+    }
+
     selectedZoneLayer = null;
 
-    document.getElementById(
-        "selected-zone-name"
-    ).textContent =
-        "Haritadan bir bölge seçin";
+    const clearSelectionButton =
+        document.getElementById(
+            "clear-zone-selection"
+        );
 
-    if (hourlyDemandChart) {
-        hourlyDemandChart.destroy();
-        hourlyDemandChart = null;
+    if (clearSelectionButton) {
+        clearSelectionButton.hidden = true;
     }
+
+    clearHourlyChart(
+        "Haritadan bir bölge seçin"
+    );
 }
 
 async function refreshDashboard() {
@@ -706,7 +749,7 @@ async function refreshDashboard() {
 
 
     updateActiveFilterSummary();
-    selectedZoneLayer = null;
+    resetHourlySelection();;
     setDashboardLoading(true);
 
     setDashboardStatus(

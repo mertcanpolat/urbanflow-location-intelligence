@@ -486,6 +486,31 @@ main {
     animation: loading-spin 750ms linear infinite;
 }
 
+.clear-zone-selection {
+    flex-shrink: 0;
+    padding: 7px 10px;
+
+    border: 1px solid #cbd5e1;
+    border-radius: 7px;
+
+    background: #ffffff;
+    color: #334155;
+
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+
+.clear-zone-selection:hover {
+    border-color: #94a3b8;
+    background: #f8fafc;
+}
+
+.clear-zone-selection:focus-visible {
+    outline: 2px solid #2563eb;
+    outline-offset: 2px;
+}
+
 @keyframes loading-spin {
     to {
         transform: rotate(360deg);
