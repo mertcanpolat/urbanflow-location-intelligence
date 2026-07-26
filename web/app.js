@@ -6,11 +6,13 @@ let demandLegend;
 
 let demandBreaks = [0, 0, 0];
 
+const DEFAULT_MAP_CENTER = [40.73, -73.93];
+const DEFAULT_MAP_ZOOM = 10;
 const zoneLayersById = new Map();
 
 const map = L.map("map").setView(
-    [40.73, -73.93],
-    10
+    DEFAULT_MAP_CENTER,
+    DEFAULT_MAP_ZOOM
 );
 
 L.tileLayer(
@@ -226,6 +228,46 @@ function populateHours() {
     }
 }
 
+function updateMapView() {
+    if (
+        !geoJsonLayer
+        || geoJsonLayer.getLayers().length === 0
+    ) {
+        map.setView(
+            DEFAULT_MAP_CENTER,
+            DEFAULT_MAP_ZOOM
+        );
+
+        return;
+    }
+
+    const borough = document
+        .getElementById("borough-filter")
+        .value;
+
+    if (!borough) {
+        map.setView(
+            DEFAULT_MAP_CENTER,
+            DEFAULT_MAP_ZOOM
+        );
+
+        return;
+    }
+
+    const bounds = geoJsonLayer.getBounds();
+
+    if (bounds.isValid()) {
+        map.fitBounds(
+            bounds,
+            {
+                padding: [24, 24],
+                maxZoom: 12,
+                animate: true
+            }
+        );
+    }
+}
+
 async function loadMapData() {
     const geojson = await fetchJson(
         buildFilteredApiUrl(
@@ -270,6 +312,7 @@ async function loadMapData() {
 
     window.setTimeout(() => {
         map.invalidateSize();
+        updateMapView();
     }, 100);
     
     return true;
@@ -660,6 +703,7 @@ async function refreshDashboard() {
         return;
     }
 
+    selectedZoneLayer = null;
     setDashboardLoading(true);
 
     setDashboardStatus(
