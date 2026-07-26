@@ -1395,6 +1395,11 @@ function setDashboardLoading(isLoading) {
             "reset-filters"
         );
 
+    const loadingOverlay =
+        document.getElementById(
+            "dashboard-loading-overlay"
+        );
+
     if (applyButton) {
         applyButton.disabled = isLoading;
 
@@ -1406,6 +1411,23 @@ function setDashboardLoading(isLoading) {
     if (resetButton) {
         resetButton.disabled = isLoading;
     }
+
+    if (loadingOverlay) {
+        loadingOverlay.classList.toggle(
+            "is-visible",
+            isLoading
+        );
+
+        loadingOverlay.setAttribute(
+            "aria-hidden",
+            String(!isLoading)
+        );
+    }
+
+    document.body.setAttribute(
+        "aria-busy",
+        String(isLoading)
+    );
 }
 
 function clearDashboardSummary() {

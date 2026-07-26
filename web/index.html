@@ -26,137 +26,151 @@
     </header>
 
     <main>
+        <div id="dashboard-loading-overlay" class="dashboard-loading-overlay" role="status" aria-live="polite"
+            aria-hidden="true">
+            <div class="dashboard-loading-card">
+                <div class="loading-spinner" aria-hidden="true"></div>
+
+                <div>
+                    <strong>Veriler hazırlanıyor</strong>
+                    <span>
+                        Harita ve grafikler güncelleniyor...
+                    </span>
+                </div>
+            </div>
+        </div>
+
         <aside class="sidebar">
-            <h2>Harita Bilgisi</h2>
+                <h2>Harita Bilgisi</h2>
 
-            <p>
-                Taksi bölgeleri, başlangıç yolculuğu sayılarına göre
-                görselleştirilmektedir.
-            </p>
+                <p>
+                    Taksi bölgeleri, başlangıç yolculuğu sayılarına göre
+                    görselleştirilmektedir.
+                </p>
 
-            <div class="filter-panel">
-                <h3>Filtreler</h3>
+                <div class="filter-panel">
+                    <h3>Filtreler</h3>
 
-                <label for="borough-filter">
-                    Borough
-                </label>
+                    <label for="borough-filter">
+                        Borough
+                    </label>
 
-                <select id="borough-filter">
-                    <option value="">Tümü</option>
-                </select>
+                    <select id="borough-filter">
+                        <option value="">Tümü</option>
+                    </select>
 
-                <label for="hour-filter">
-                    Saat
-                </label>
-                <select id="hour-filter">
-                    <option value="">Tüm saatler</option>
-                </select>
+                    <label for="hour-filter">
+                        Saat
+                    </label>
+                    <select id="hour-filter">
+                        <option value="">Tüm saatler</option>
+                    </select>
 
-                <label for="weekday-filter">
-                    Haftanın günü
-                </label>
+                    <label for="weekday-filter">
+                        Haftanın günü
+                    </label>
 
-                <select id="weekday-filter">
-                    <option value="">Tüm günler</option>
-                    <option value="1">Pazartesi</option>
-                    <option value="2">Salı</option>
-                    <option value="3">Çarşamba</option>
-                    <option value="4">Perşembe</option>
-                    <option value="5">Cuma</option>
-                    <option value="6">Cumartesi</option>
-                    <option value="7">Pazar</option>
-                </select>
+                    <select id="weekday-filter">
+                        <option value="">Tüm günler</option>
+                        <option value="1">Pazartesi</option>
+                        <option value="2">Salı</option>
+                        <option value="3">Çarşamba</option>
+                        <option value="4">Perşembe</option>
+                        <option value="5">Cuma</option>
+                        <option value="6">Cumartesi</option>
+                        <option value="7">Pazar</option>
+                    </select>
 
-                <label for="date-from-filter">
-                    Başlangıç tarihi
-                </label>
+                    <label for="date-from-filter">
+                        Başlangıç tarihi
+                    </label>
 
-                <input id="date-from-filter" type="date">
+                    <input id="date-from-filter" type="date">
 
-                <label for="date-to-filter">
-                    Bitiş tarihi
-                </label>
+                    <label for="date-to-filter">
+                        Bitiş tarihi
+                    </label>
 
-                <input id="date-to-filter" type="date">
+                    <input id="date-to-filter" type="date">
 
-                <button id="apply-filters">
-                    Filtreleri Uygula
-                </button>
+                    <button id="apply-filters">
+                        Filtreleri Uygula
+                    </button>
 
-                <button id="reset-filters" class="secondary-button">
-                    Temizle
-                </button>
-            </div>
-
-            <div class="kpi-grid">
-                <div class="metric-card">
-                    <span>Toplam bölge</span>
-                    <strong id="zone-count">-</strong>
+                    <button id="reset-filters" class="secondary-button">
+                        Temizle
+                    </button>
                 </div>
 
-                <div class="metric-card">
-                    <span>Toplam yolculuk</span>
-                    <strong id="trip-count">-</strong>
+                <div class="kpi-grid">
+                    <div class="metric-card">
+                        <span>Toplam bölge</span>
+                        <strong id="zone-count">-</strong>
+                    </div>
+
+                    <div class="metric-card">
+                        <span>Toplam yolculuk</span>
+                        <strong id="trip-count">-</strong>
+                    </div>
+
+                    <div class="metric-card">
+                        <span>Ortalama ücret</span>
+                        <strong id="average-amount">-</strong>
+                    </div>
+
+                    <div class="metric-card">
+                        <span>Ortalama mesafe</span>
+                        <strong id="average-distance">-</strong>
+                    </div>
                 </div>
 
-                <div class="metric-card">
-                    <span>Ortalama ücret</span>
-                    <strong id="average-amount">-</strong>
+                <div class="chart-panel">
+                    <div class="chart-header">
+                        <h3>Saatlik Talep</h3>
+
+                        <span id="selected-zone-name">
+                            Haritadan bir bölge seçin
+                        </span>
+                    </div>
+
+                    <div class="chart-container">
+                        <canvas id="hourly-demand-chart"></canvas>
+                    </div>
                 </div>
 
-                <div class="metric-card">
-                    <span>Ortalama mesafe</span>
-                    <strong id="average-distance">-</strong>
-                </div>
-            </div>
+                <div class="chart-panel">
+                    <div class="chart-header">
+                        <h3>Günlük Talep Trendi</h3>
 
-            <div class="chart-panel">
-                <div class="chart-header">
-                    <h3>Saatlik Talep</h3>
+                        <span>
+                            Seçili filtrelere göre yolculuk sayısı
+                        </span>
+                    </div>
 
-                    <span id="selected-zone-name">
-                        Haritadan bir bölge seçin
-                    </span>
-                </div>
-
-                <div class="chart-container">
-                    <canvas id="hourly-demand-chart"></canvas>
-                </div>
-            </div>
-
-            <div class="chart-panel">
-                <div class="chart-header">
-                    <h3>Günlük Talep Trendi</h3>
-
-                    <span>
-                        Seçili filtrelere göre yolculuk sayısı
-                    </span>
+                    <div class="chart-container daily-chart-container">
+                        <canvas id="daily-demand-chart"></canvas>
+                    </div>
                 </div>
 
-                <div class="chart-container daily-chart-container">
-                    <canvas id="daily-demand-chart"></canvas>
+                <div class="ranking-panel">
+                    <div class="ranking-header">
+                        <h3>En Yoğun Bölgeler</h3>
+
+                        <span>
+                            Seçili filtrelere göre ilk 10
+                        </span>
+                    </div>
+
+                    <div id="zone-ranking" class="zone-ranking">
+                        <p class="ranking-message">
+                            Sıralama yükleniyor...
+                        </p>
+                    </div>
                 </div>
-            </div>
 
-            <div class="ranking-panel">
-                <div class="ranking-header">
-                    <h3>En Yoğun Bölgeler</h3>
+            </aside>
 
-                    <span>
-                        Seçili filtrelere göre ilk 10
-                    </span>
-                </div>
-
-                <div id="zone-ranking" class="zone-ranking">
-                    <p class="ranking-message">
-                        Sıralama yükleniyor...
-                    </p>
-                </div>
-            </div>
-
-        </aside>
-
-        <section id="map"></section>
+            <section id="map"></section>
     </main>
 
     <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
