@@ -86,3 +86,11 @@ class GeoJSONFeature(BaseModel):
 class GeoJSONFeatureCollection(BaseModel):
     type: str
     features: list[GeoJSONFeature]
+    
+class DailyDemandForecastItem(BaseModel):
+    forecast_date: date
+    weekday: int
+    predicted_trip_count: int
+    lower_bound: int
+    upper_bound: int
+    sample_count: int

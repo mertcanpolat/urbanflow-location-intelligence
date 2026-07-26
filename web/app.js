@@ -2,8 +2,10 @@ let geoJsonLayer;
 let hourlyDemandChart;
 let dailyDemandChart;
 let weekdayHourHeatmapChart;
+let dailyDemandForecastChart;
 let selectedZoneLayer;
 let demandLegend;
+
 
 const DEMAND_CLASSES = {
     0: {
@@ -902,17 +904,23 @@ async function refreshDashboard() {
         "Isı haritası yükleniyor..."
     );
 
+    clearDailyDemandForecastChart(
+        "Talep tahmini yükleniyor..."
+    );
+
     try {
         const [
             mapHasData,
             summaryHasData,
             trendHasData,
-            heatmapHasData
+            heatmapHasData,
+            forecastHasData
         ] = await Promise.all([
             loadMapData(),
             loadDashboardSummary(),
             loadDailyTrend(),
-            loadWeekdayHourHeatmap()
+            loadWeekdayHourHeatmap(),
+            loadDailyDemandForecast()
         ]);
 
         const rankingHasData =
@@ -923,6 +931,7 @@ async function refreshDashboard() {
             || summaryHasData
             || trendHasData
             || heatmapHasData
+            || forecastHasData
             || rankingHasData;
 
         if (!dashboardHasData) {
@@ -1765,6 +1774,7 @@ function clearDashboardData(
     clearSummaryCards();
     clearDailyTrendChart(message);
     clearWeekdayHourHeatmap(message);
+    clearDailyDemandForecastChart(message);
     clearZoneRanking(message);
     resetHourlySelection();
 }
@@ -2081,6 +2091,251 @@ function clearWeekdayHourHeatmap(
 
     const emptyState = document.getElementById(
         "weekday-hour-heatmap-empty"
+    );
+
+    if (canvas) {
+        canvas.hidden = true;
+    }
+
+    if (emptyState) {
+        emptyState.textContent = message;
+        emptyState.hidden = false;
+    }
+}
+
+function buildDailyDemandForecastUrl() {
+    const parameters =
+        getDashboardFilterParameters();
+
+    parameters.delete("hour");
+    parameters.delete("weekday");
+    parameters.delete("date_from");
+    parameters.delete("date_to");
+
+    parameters.set(
+        "forecast_days",
+        "7"
+    );
+
+    parameters.set(
+        "history_weeks",
+        "4"
+    );
+
+    const queryString =
+        parameters.toString();
+
+    return (
+        "/api/v1/forecast/daily-demand?"
+        + queryString
+    );
+}
+
+function renderDailyDemandForecastChart(data) {
+    const canvas = document.getElementById(
+        "daily-demand-forecast-chart"
+    );
+
+    const emptyState = document.getElementById(
+        "forecast-chart-empty"
+    );
+
+    if (!canvas) {
+        return;
+    }
+
+    if (emptyState) {
+        emptyState.hidden = true;
+    }
+
+    canvas.hidden = false;
+
+    if (dailyDemandForecastChart) {
+        dailyDemandForecastChart.destroy();
+    }
+
+    const labels = data.map((item) => {
+        const date = new Date(
+            `${item.forecast_date}T00:00:00`
+        );
+
+        return date.toLocaleDateString(
+            "tr-TR",
+            {
+                weekday: "short",
+                day: "2-digit",
+                month: "2-digit"
+            }
+        );
+    });
+
+    const predictedValues = data.map(
+        (item) =>
+            Number(
+                item.predicted_trip_count || 0
+            )
+    );
+
+    const lowerValues = data.map(
+        (item) =>
+            Number(
+                item.lower_bound || 0
+            )
+    );
+
+    const upperValues = data.map(
+        (item) =>
+            Number(
+                item.upper_bound || 0
+            )
+    );
+
+    const context = canvas.getContext("2d");
+
+    dailyDemandForecastChart = new Chart(
+        context,
+        {
+            type: "line",
+
+            data: {
+                labels,
+
+                datasets: [
+                    {
+                        label: "Alt sınır",
+                        data: lowerValues,
+                        borderWidth: 0,
+                        pointRadius: 0,
+                        fill: false
+                    },
+                    {
+                        label: "Üst sınır",
+                        data: upperValues,
+                        borderWidth: 0,
+                        pointRadius: 0,
+                        fill: "-1"
+                    },
+                    {
+                        label: "Tahmini yolculuk",
+                        data: predictedValues,
+                        borderWidth: 3,
+                        pointRadius: 4,
+                        tension: 0.25
+                    }
+                ]
+            },
+
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+
+                interaction: {
+                    intersect: false,
+                    mode: "index"
+                },
+
+                plugins: {
+                    legend: {
+                        display: false,
+                        position: "bottom",
+
+                        labels: {
+                            boxWidth: 12,
+                            font: {
+                                size: 10
+                            }
+                        }
+                    },
+
+                    tooltip: {
+                        callbacks: {
+                            label(context) {
+                                return (
+                                    `${context.dataset.label}: `
+                                    + Number(
+                                        context.raw
+                                    ).toLocaleString("tr-TR")
+                                );
+                            },
+
+                            afterBody(items) {
+                                const index =
+                                    items[0].dataIndex;
+
+                                return (
+                                    "Örnek gün sayısı: "
+                                    + Number(
+                                        data[index]
+                                            .sample_count || 0
+                                    )
+                                );
+                            }
+                        }
+                    }
+                },
+
+                scales: {
+                    y: {
+                        beginAtZero: false,
+
+                        ticks: {
+                            callback(value) {
+                                return Number(
+                                    value
+                                ).toLocaleString("tr-TR");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    );
+}
+
+async function loadDailyDemandForecast() {
+    const data = await fetchJson(
+        buildDailyDemandForecastUrl()
+    );
+
+    if (
+        !Array.isArray(data)
+        || data.length === 0
+    ) {
+        clearDailyDemandForecastChart();
+        return false;
+    }
+
+    const hasForecast = data.some(
+        (item) =>
+            Number(
+                item.predicted_trip_count || 0
+            ) > 0
+    );
+
+    if (!hasForecast) {
+        clearDailyDemandForecastChart();
+        return false;
+    }
+
+    renderDailyDemandForecastChart(data);
+
+    return true;
+}
+
+function clearDailyDemandForecastChart(
+    message = "Talep tahmini bulunamadı."
+) {
+    if (dailyDemandForecastChart) {
+        dailyDemandForecastChart.destroy();
+        dailyDemandForecastChart = null;
+    }
+
+    const canvas = document.getElementById(
+        "daily-demand-forecast-chart"
+    );
+
+    const emptyState = document.getElementById(
+        "forecast-chart-empty"
     );
 
     if (canvas) {

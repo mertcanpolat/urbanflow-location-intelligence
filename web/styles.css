@@ -724,3 +724,21 @@ main {
     color: #0f172a;
     font-weight: 600;
 }
+
+.forecast-chart-container {
+    position: relative;
+    width: 100%;
+    height: 280px;
+}
+
+@media (max-width: 768px) {
+    .forecast-chart-container {
+        height: 240px;
+    }
+}
+
+@media (max-width: 480px) {
+    .forecast-chart-container {
+        height: 220px;
+    }
+}

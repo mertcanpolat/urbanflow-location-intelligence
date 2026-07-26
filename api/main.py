@@ -10,6 +10,7 @@ from api.core.logging_config import configure_logging
 from api.routers.dashboard import router as dashboard_router
 from api.routers.system import router as system_router
 from api.routers.zones import router as zones_router
+from api.routers.forecast import router as forecast_router
 
 
 configure_logging()
@@ -77,6 +78,7 @@ register_exception_handlers(app)
 app.include_router(system_router)
 app.include_router(dashboard_router)
 app.include_router(zones_router)
+app.include_router(forecast_router)
 
 app.mount(
     "/static",
