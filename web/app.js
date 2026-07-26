@@ -357,6 +357,7 @@ document
 async function initializeApplication() {
     try {
         populateHours();
+        updateActiveFilterSummary();
         await loadBoroughs();
         await refreshDashboard();
     } catch (error) {
@@ -703,6 +704,8 @@ async function refreshDashboard() {
         return;
     }
 
+
+    updateActiveFilterSummary();
     selectedZoneLayer = null;
     setDashboardLoading(true);
 
@@ -1088,6 +1091,105 @@ function buildFilteredApiUrl(
     return queryString
         ? `${endpoint}?${queryString}`
         : endpoint;
+}
+
+function formatFilterDate(dateValue) {
+    if (!dateValue) {
+        return null;
+    }
+
+    const date = new Date(
+        `${dateValue}T00:00:00`
+    );
+
+    return date.toLocaleDateString(
+        "tr-TR",
+        {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric"
+        }
+    );
+}
+
+function updateActiveFilterSummary() {
+    const boroughSelect =
+        document.getElementById(
+            "borough-filter"
+        );
+
+    const hourSelect =
+        document.getElementById(
+            "hour-filter"
+        );
+
+    const weekdaySelect =
+        document.getElementById(
+            "weekday-filter"
+        );
+
+    const dateFrom =
+        document.getElementById(
+            "date-from-filter"
+        ).value;
+
+    const dateTo =
+        document.getElementById(
+            "date-to-filter"
+        ).value;
+
+    const activeFilters = [];
+
+    if (boroughSelect.value) {
+        activeFilters.push(
+            boroughSelect.options[
+                boroughSelect.selectedIndex
+            ].textContent
+        );
+    }
+
+    if (hourSelect.value !== "") {
+        activeFilters.push(
+            hourSelect.options[
+                hourSelect.selectedIndex
+            ].textContent
+        );
+    }
+
+    if (weekdaySelect.value !== "") {
+        activeFilters.push(
+            weekdaySelect.options[
+                weekdaySelect.selectedIndex
+            ].textContent
+        );
+    }
+
+    const formattedFrom =
+        formatFilterDate(dateFrom);
+
+    const formattedTo =
+        formatFilterDate(dateTo);
+
+    if (formattedFrom && formattedTo) {
+        activeFilters.push(
+            `${formattedFrom} – ${formattedTo}`
+        );
+    } else if (formattedFrom) {
+        activeFilters.push(
+            `${formattedFrom} sonrası`
+        );
+    } else if (formattedTo) {
+        activeFilters.push(
+            `${formattedTo} öncesi`
+        );
+    }
+
+    setElementText(
+        "active-filter-text",
+        activeFilters.length > 0
+            ? activeFilters.join(" · ")
+            : "Tüm veriler"
+    );
 }
 
 function validateDateFilters() {
