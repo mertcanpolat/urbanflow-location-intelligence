@@ -10,12 +10,20 @@ from api.models.filters import (
 from api.models.responses import (
     DailyTrendItem,
     DashboardSummaryResponse,
+    WeekdayHourHeatmapItem,
 )
+
 from api.services.dashboard_service import (
     get_daily_trend as get_daily_trend_service,
     get_dashboard_summary as get_dashboard_summary_service,
+    get_weekday_hour_heatmap as get_weekday_hour_heatmap_service,
 )
 
+from api.models.responses import (
+    DailyTrendItem,
+    DashboardSummaryResponse,
+    WeekdayHourHeatmapItem,
+)
 
 logger = logging.getLogger(
     "urbanflow.dashboard_router"
@@ -70,6 +78,33 @@ def get_daily_trend(
 
     logger.info(
         "Daily trend request completed: row_count=%s",
+        len(result),
+    )
+
+    return result
+
+@router.get(
+    "/weekday-hour-heatmap",
+    response_model=list[WeekdayHourHeatmapItem],
+)
+def get_weekday_hour_heatmap(
+    filters: DashboardFilters = Depends(
+        get_dashboard_filters
+    ),
+) -> list[dict[str, Any]]:
+    """Return demand grouped by weekday and hour."""
+
+    logger.info(
+        "Weekday-hour heatmap request received"
+    )
+
+    result = get_weekday_hour_heatmap_service(
+        filters
+    )
+
+    logger.info(
+        "Weekday-hour heatmap request completed: "
+        "row_count=%s",
         len(result),
     )
 

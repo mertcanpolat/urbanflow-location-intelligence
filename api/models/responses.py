@@ -24,7 +24,11 @@ class DailyTrendItem(BaseModel):
     trip_count: int
     avg_total_amount: float | None
 
-
+class WeekdayHourHeatmapItem(BaseModel):
+    weekday: int
+    pickup_hour: int
+    trip_count: int
+    
 class ZoneRankingItem(BaseModel):
     location_id: int
     zone_name: str

@@ -121,3 +121,38 @@ def test_invalid_date_range_returns_400(
     assert response.json()["detail"] == (
         "Start date cannot be later than end date."
     )
+
+def test_weekday_hour_heatmap(
+    client: TestClient,
+    monkeypatch,
+) -> None:
+    expected_result = [
+        {
+            "weekday": 1,
+            "pickup_hour": 8,
+            "trip_count": 17556,
+        },
+        {
+            "weekday": 1,
+            "pickup_hour": 9,
+            "trip_count": 18015,
+        },
+    ]
+
+    def fake_fetch_weekday_hour_heatmap(
+        filters,
+    ):
+        return expected_result
+
+    monkeypatch.setattr(
+        dashboard_router,
+        "get_weekday_hour_heatmap_service",
+        fake_fetch_weekday_hour_heatmap,
+    )
+
+    response = client.get(
+        "/api/v1/dashboard/weekday-hour-heatmap"
+    )
+
+    assert response.status_code == 200
+    assert response.json() == expected_result

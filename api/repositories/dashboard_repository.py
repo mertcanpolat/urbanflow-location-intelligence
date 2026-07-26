@@ -173,3 +173,75 @@ def fetch_daily_trend(
     )
 
     return result
+
+def fetch_weekday_hour_heatmap(
+    filters: DashboardFilters,
+) -> list[dict[str, Any]]:
+    logger.info(
+        "Fetching weekday-hour heatmap with filters=%s",
+        filters_to_dict(filters),
+    )
+
+    query = text(
+        """
+        SELECT
+            EXTRACT(
+                ISODOW FROM d.pickup_date
+            )::smallint AS weekday,
+
+            d.pickup_hour,
+
+            SUM(
+                d.trip_count
+            )::bigint AS trip_count
+
+        FROM analytics.zone_hourly_demand AS d
+
+        JOIN core.taxi_zones AS z
+            ON d.location_id = z.location_id
+
+        WHERE (
+            CAST(:borough AS VARCHAR) IS NULL
+            OR z.borough = CAST(:borough AS VARCHAR)
+        )
+        AND (
+            CAST(:date_from AS DATE) IS NULL
+            OR d.pickup_date >= CAST(:date_from AS DATE)
+        )
+        AND (
+            CAST(:date_to AS DATE) IS NULL
+            OR d.pickup_date <= CAST(:date_to AS DATE)
+        )
+
+        GROUP BY
+            EXTRACT(
+                ISODOW FROM d.pickup_date
+            ),
+            d.pickup_hour
+
+        ORDER BY
+            weekday,
+            d.pickup_hour
+        """
+    )
+
+    parameters = filters_to_dict(filters)
+
+    with engine.connect() as connection:
+        rows = (
+            connection.execute(
+                query,
+                parameters,
+            )
+            .mappings()
+            .all()
+        )
+
+    result = [dict(row) for row in rows]
+
+    logger.info(
+        "Weekday-hour heatmap fetched: row_count=%s",
+        len(result),
+    )
+
+    return result
