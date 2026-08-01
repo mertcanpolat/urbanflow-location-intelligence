@@ -241,8 +241,55 @@
                         <strong id="zone-detail-hotspot-class">-</strong>
                     </div>
                 </div>
+
+                <div class="zone-detail-actions">
+                    <button id="add-zone-comparison" class="comparison-add-button" type="button">
+                        Karşılaştırmaya Ekle
+                    </button>
+                </div>
             </div>
 
+            <div id="zone-comparison-panel" class="zone-comparison-panel">
+                <div class="comparison-header">
+                    <div>
+                        <h3>Zone Karşılaştırma</h3>
+
+                        <span>
+                            En fazla 3 zone seçebilirsiniz
+                        </span>
+                    </div>
+
+                    <button id="clear-zone-comparison" class="comparison-clear-button" type="button" disabled>
+                        Temizle
+                    </button>
+                </div>
+
+                <div id="comparison-zone-list" class="comparison-zone-list">
+                    <div class="comparison-empty-message">
+                        Karşılaştırmak için bir zone seçin ve
+                        “Karşılaştırmaya Ekle” butonuna basın.
+                    </div>
+                </div>
+
+                <div id="comparison-results" class="comparison-results" hidden>
+                    <div class="comparison-chart-container">
+                        <canvas id="zone-comparison-chart"></canvas>
+                    </div>
+
+                    <div class="comparison-table-wrapper">
+                        <table class="comparison-table">
+                            <thead>
+                                <tr id="comparison-table-header">
+                                    <th>Metrik</th>
+                                </tr>
+                            </thead>
+
+                            <tbody id="comparison-table-body">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
 
             <div class="chart-panel">
                 <div class="chart-header">

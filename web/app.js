@@ -3,9 +3,12 @@ let hourlyDemandChart;
 let dailyDemandChart;
 let weekdayHourHeatmapChart;
 let dailyDemandForecastChart;
+let zoneComparisonChart;
 let selectedZoneLayer;
 let demandLegend;
 
+let currentZoneDetails = null;
+const comparisonZones = [];
 
 const DEMAND_CLASSES = {
     0: {
@@ -630,9 +633,34 @@ if (clearZoneSelectionButton) {
     );
 }
 
+const addZoneComparisonButton =
+    document.getElementById(
+        "add-zone-comparison"
+    );
+
+if (addZoneComparisonButton) {
+    addZoneComparisonButton.addEventListener(
+        "click",
+        addCurrentZoneToComparison
+    );
+}
+
+const clearZoneComparisonButton =
+    document.getElementById(
+        "clear-zone-comparison"
+    );
+
+if (clearZoneComparisonButton) {
+    clearZoneComparisonButton.addEventListener(
+        "click",
+        clearZoneComparison
+    );
+}
+
 async function initializeApplication() {
     try {
         populateHours();
+        renderComparisonZoneList();
         updateActiveFilterSummary();
         await loadBoroughs();
         await refreshDashboard();
@@ -1010,6 +1038,15 @@ function resetHourlySelection() {
     clearZoneDetails();
 }
 
+function resetZoneComparisonSilently() {
+    comparisonZones.splice(
+        0,
+        comparisonZones.length
+    );
+
+    renderComparisonZoneList();
+}
+
 async function refreshDashboard() {
     if (!validateDateFilters()) {
         return;
@@ -1019,6 +1056,7 @@ async function refreshDashboard() {
     updateActiveFilterSummary();
     resetHourlySelection();;
     setDashboardLoading(true);
+    resetZoneComparisonSilently();
 
     setDashboardStatus(
         "Veriler yükleniyor...",
@@ -1593,6 +1631,7 @@ function getPriorityBadgeClass(priorityClass) {
 }
 
 function renderZoneDetails(details) {
+    currentZoneDetails = details;
     const panel = document.getElementById(
         "zone-detail-panel"
     );
@@ -1725,6 +1764,22 @@ function renderZoneDetails(details) {
         details.hotspot_class || "-"
     );
 
+    const addButton = document.getElementById(
+        "add-zone-comparison"
+    );
+
+    if (addButton) {
+        const alreadyAdded =
+            comparisonZones.some(
+                (zone) =>
+                    Number(zone.location_id)
+                    === Number(details.location_id)
+            );
+
+        addButton.disabled =
+            comparisonZones.length >= 3
+            || alreadyAdded;
+    }
     panel.hidden = false;
 }
 
@@ -1755,6 +1810,7 @@ async function loadZoneDetails(locationId) {
 }
 
 function clearZoneDetails() {
+    currentZoneDetails = null;
     const panel = document.getElementById(
         "zone-detail-panel"
     );
@@ -2703,5 +2759,491 @@ function clearDailyDemandForecastChart(
     if (emptyState) {
         emptyState.textContent = message;
         emptyState.hidden = false;
+    }
+}
+
+function renderComparisonZoneList() {
+    const container = document.getElementById(
+        "comparison-zone-list"
+    );
+
+    const clearButton = document.getElementById(
+        "clear-zone-comparison"
+    );
+
+    const addButton = document.getElementById(
+        "add-zone-comparison"
+    );
+
+    if (!container) {
+        return;
+    }
+
+    if (comparisonZones.length === 0) {
+        container.innerHTML = `
+            <div class="comparison-empty-message">
+                Karşılaştırmak için bir zone seçin ve
+                “Karşılaştırmaya Ekle” butonuna basın.
+            </div>
+        `;
+
+        if (clearButton) {
+            clearButton.disabled = true;
+        }
+
+        clearZoneComparisonResults();
+
+        return;
+    }
+
+    if (clearButton) {
+        clearButton.disabled = false;
+    }
+
+    container.innerHTML = "";
+
+    comparisonZones.forEach((zone) => {
+        const item = document.createElement(
+            "div"
+        );
+
+        item.className =
+            "comparison-zone-item";
+
+        item.innerHTML = `
+            <div class="comparison-zone-info">
+                <strong>
+                    ${zone.zone_name}
+                </strong>
+
+                <span>
+                    ${zone.borough} · ID ${zone.location_id}
+                </span>
+            </div>
+
+            <span class="comparison-zone-score">
+                ${formatNullableNumber(
+                    zone.zone_score
+                )}
+            </span>
+
+            <button
+                type="button"
+                class="comparison-remove-button"
+                aria-label="${zone.zone_name} zone'unu kaldır"
+            >
+                ×
+            </button>
+        `;
+
+        item
+            .querySelector(
+                ".comparison-remove-button"
+            )
+            .addEventListener(
+                "click",
+                () => {
+                    removeZoneFromComparison(
+                        zone.location_id
+                    );
+                }
+            );
+
+        container.appendChild(item);
+    });
+
+    if (addButton) {
+        const currentLocationId = Number(
+            currentZoneDetails?.location_id
+        );
+
+        const alreadyAdded =
+            comparisonZones.some(
+                (zone) =>
+                    Number(zone.location_id)
+                    === currentLocationId
+            );
+
+        addButton.disabled =
+            comparisonZones.length >= 3
+            || alreadyAdded;
+    }
+
+    renderZoneComparison();
+}
+
+function addCurrentZoneToComparison() {
+    if (!currentZoneDetails) {
+        setDashboardStatus(
+            "Önce bir zone seçin.",
+            "warning"
+        );
+
+        return;
+    }
+
+    const alreadyAdded =
+        comparisonZones.some(
+            (zone) =>
+                Number(zone.location_id)
+                === Number(
+                    currentZoneDetails.location_id
+                )
+        );
+
+    if (alreadyAdded) {
+        setDashboardStatus(
+            "Bu zone karşılaştırmaya zaten eklendi.",
+            "warning"
+        );
+
+        return;
+    }
+
+    if (comparisonZones.length >= 3) {
+        setDashboardStatus(
+            "En fazla 3 zone karşılaştırabilirsiniz.",
+            "warning"
+        );
+
+        return;
+    }
+
+    comparisonZones.push({
+        ...currentZoneDetails
+    });
+
+    renderComparisonZoneList();
+
+    setDashboardStatus(
+        `${currentZoneDetails.zone_name} karşılaştırmaya eklendi.`,
+        "success"
+    );
+}
+
+function removeZoneFromComparison(locationId) {
+    const index = comparisonZones.findIndex(
+        (zone) =>
+            Number(zone.location_id)
+            === Number(locationId)
+    );
+
+    if (index === -1) {
+        return;
+    }
+
+    comparisonZones.splice(index, 1);
+
+    renderComparisonZoneList();
+
+    const addButton = document.getElementById(
+        "add-zone-comparison"
+    );
+
+    if (
+        addButton
+        && currentZoneDetails
+    ) {
+        const alreadyAdded =
+            comparisonZones.some(
+                (zone) =>
+                    Number(zone.location_id)
+                    === Number(
+                        currentZoneDetails.location_id
+                    )
+            );
+
+        addButton.disabled =
+            comparisonZones.length >= 3
+            || alreadyAdded;
+    }
+}
+
+function clearZoneComparison() {
+    comparisonZones.splice(
+        0,
+        comparisonZones.length
+    );
+
+    renderComparisonZoneList();
+
+    const addButton = document.getElementById(
+        "add-zone-comparison"
+    );
+
+    if (addButton) {
+        addButton.disabled =
+            !currentZoneDetails;
+    }
+
+    setDashboardStatus(
+        "Zone karşılaştırması temizlendi.",
+        "info"
+    );
+}
+
+function renderZoneComparisonChart() {
+    const canvas = document.getElementById(
+        "zone-comparison-chart"
+    );
+
+    if (!canvas) {
+        return;
+    }
+
+    if (zoneComparisonChart) {
+        zoneComparisonChart.destroy();
+    }
+
+    const labels = [
+        "Zone Skoru",
+        "Talep Skoru",
+        "Hotspot",
+        "Süreklilik"
+    ];
+
+    const datasets = comparisonZones.map(
+        (zone) => ({
+            label: zone.zone_name,
+            data: [
+                Number(zone.zone_score || 0),
+                Number(zone.demand_score || 0),
+                Number(
+                    zone.hotspot_component_score || 0
+                ),
+                Number(
+                    zone.consistency_score || 0
+                )
+            ],
+            borderWidth: 1
+        })
+    );
+
+    zoneComparisonChart = new Chart(
+        canvas.getContext("2d"),
+        {
+            type: "bar",
+
+            data: {
+                labels,
+                datasets
+            },
+
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+
+                interaction: {
+                    mode: "index",
+                    intersect: false
+                },
+
+                plugins: {
+                    legend: {
+                        position: "bottom",
+
+                        labels: {
+                            boxWidth: 12,
+                            font: {
+                                size: 10
+                            }
+                        }
+                    },
+
+                    tooltip: {
+                        callbacks: {
+                            label(context) {
+                                return (
+                                    `${context.dataset.label}: `
+                                    + Number(
+                                        context.raw
+                                    ).toLocaleString(
+                                        "tr-TR",
+                                        {
+                                            maximumFractionDigits: 2
+                                        }
+                                    )
+                                );
+                            }
+                        }
+                    }
+                },
+
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        max: 100,
+
+                        ticks: {
+                            stepSize: 20
+                        }
+                    }
+                }
+            }
+        }
+    );
+}
+
+function renderZoneComparisonTable() {
+    const header = document.getElementById(
+        "comparison-table-header"
+    );
+
+    const body = document.getElementById(
+        "comparison-table-body"
+    );
+
+    if (!header || !body) {
+        return;
+    }
+
+    header.innerHTML = `
+        <th>Metrik</th>
+        ${comparisonZones
+            .map(
+                (zone) => `
+                    <th>${zone.zone_name}</th>
+                `
+            )
+            .join("")}
+    `;
+
+    const rows = [
+        {
+            label: "Toplam yolculuk",
+            value: (zone) =>
+                Number(
+                    zone.trip_count || 0
+                ).toLocaleString("tr-TR")
+        },
+        {
+            label: "Zone skoru",
+            value: (zone) =>
+                formatNullableNumber(
+                    zone.zone_score
+                )
+        },
+        {
+            label: "Talep skoru",
+            value: (zone) =>
+                formatNullableNumber(
+                    zone.demand_score
+                )
+        },
+        {
+            label: "Hotspot bileşeni",
+            value: (zone) =>
+                formatNullableNumber(
+                    zone.hotspot_component_score
+                )
+        },
+        {
+            label: "Süreklilik",
+            value: (zone) =>
+                formatNullableNumber(
+                    zone.consistency_score
+                )
+        },
+        {
+            label: "Ortalama ücret",
+            value: (zone) =>
+                zone.avg_total_amount !== null
+                    ? `$${formatNullableNumber(
+                        zone.avg_total_amount
+                    )}`
+                    : "-"
+        },
+        {
+            label: "Ortalama mesafe",
+            value: (zone) =>
+                zone.avg_trip_distance !== null
+                    ? `${formatNullableNumber(
+                        zone.avg_trip_distance
+                    )} mil`
+                    : "-"
+        },
+        {
+            label: "En yoğun gün",
+            value: (zone) =>
+                zone.peak_weekday_name || "-"
+        },
+        {
+            label: "En yoğun saat",
+            value: (zone) =>
+                zone.peak_hour !== null
+                    && zone.peak_hour !== undefined
+                    ? `${String(
+                        zone.peak_hour
+                    ).padStart(2, "0")}:00`
+                    : "-"
+        },
+        {
+            label: "Öncelik sınıfı",
+            value: (zone) =>
+                zone.priority_class || "-"
+        }
+    ];
+
+    body.innerHTML = rows
+        .map(
+            (row) => `
+                <tr>
+                    <td>${row.label}</td>
+
+                    ${comparisonZones
+                        .map(
+                            (zone) => `
+                                <td>
+                                    ${row.value(zone)}
+                                </td>
+                            `
+                        )
+                        .join("")}
+                </tr>
+            `
+        )
+        .join("");
+}
+
+function renderZoneComparison() {
+    const results = document.getElementById(
+        "comparison-results"
+    );
+
+    if (!results) {
+        return;
+    }
+
+    if (comparisonZones.length < 2) {
+        clearZoneComparisonResults();
+        return;
+    }
+
+    results.hidden = false;
+
+    renderZoneComparisonChart();
+    renderZoneComparisonTable();
+}
+
+function clearZoneComparisonResults() {
+    const results = document.getElementById(
+        "comparison-results"
+    );
+
+    if (zoneComparisonChart) {
+        zoneComparisonChart.destroy();
+        zoneComparisonChart = null;
+    }
+
+    if (results) {
+        results.hidden = true;
+    }
+
+    const body = document.getElementById(
+        "comparison-table-body"
+    );
+
+    if (body) {
+        body.innerHTML = "";
     }
 }
