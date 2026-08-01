@@ -12,6 +12,7 @@ from api.repositories.zone_repository import (
     fetch_zone_hotspots,
     fetch_zone_scores,
     fetch_zone_details,
+    fetch_zone_trend,
 )
 
 
@@ -144,4 +145,35 @@ def get_zone_details(
     return fetch_zone_details(
         location_id=location_id,
         filters=filters,
+    )
+    
+def get_zone_trend(
+    location_id: int,
+    filters: DashboardFilters,
+    period_days: int,
+) -> dict[str, Any] | None:
+    """Return period-over-period demand trend for one zone."""
+
+    logger.info(
+        "Preparing zone trend: location_id=%s "
+        "period_days=%s",
+        location_id,
+        period_days,
+    )
+
+    zone = fetch_zone_by_id(location_id)
+
+    if zone is None:
+        logger.warning(
+            "Trend requested for unknown zone: "
+            "location_id=%s",
+            location_id,
+        )
+
+        return None
+
+    return fetch_zone_trend(
+        location_id=location_id,
+        filters=filters,
+        period_days=period_days,
     )

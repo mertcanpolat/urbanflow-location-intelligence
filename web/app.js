@@ -417,7 +417,7 @@ function onEachFeature(feature, layer) {
                 `${properties.zone_name} · ${properties.borough}`
             );
 
-            loadZoneDetails(
+            loadZoneAnalytics(
                 properties.location_id
             );
         }
@@ -661,6 +661,7 @@ async function initializeApplication() {
     try {
         populateHours();
         renderComparisonZoneList();
+        clearZoneTrend();
         updateActiveFilterSummary();
         await loadBoroughs();
         await refreshDashboard();
@@ -978,7 +979,7 @@ function renderZoneRanking(zones) {
                     `${zone.zone_name} · ${zone.borough}`
                 );
 
-                loadZoneDetails(
+                loadZoneAnalytics(
                     zone.location_id
                 );
             }
@@ -1036,6 +1037,7 @@ function resetHourlySelection() {
         "Haritadan bir bölge seçin"
     );
     clearZoneDetails();
+    clearZoneTrend();
 }
 
 function resetZoneComparisonSilently() {
@@ -1054,10 +1056,10 @@ async function refreshDashboard() {
 
 
     updateActiveFilterSummary();
-    resetHourlySelection();;
-    setDashboardLoading(true);
+    resetHourlySelection();
     resetZoneComparisonSilently();
-
+    setDashboardLoading(true);
+    
     setDashboardStatus(
         "Veriler yükleniyor...",
         "info"
@@ -1615,6 +1617,226 @@ function buildZoneDetailsUrl(locationId) {
     );
 }
 
+function buildZoneTrendUrl(
+    locationId,
+    periodDays = 7
+) {
+    const parameters =
+        getDashboardFilterParameters();
+
+    parameters.delete("borough");
+    parameters.delete("date_from");
+
+    parameters.set(
+        "period_days",
+        String(periodDays)
+    );
+
+    const queryString =
+        parameters.toString();
+
+    const endpoint =
+        `/api/v1/zones/${locationId}/trend`;
+
+    return queryString
+        ? `${endpoint}?${queryString}`
+        : endpoint;
+}
+
+function formatTrendDate(dateValue) {
+    if (!dateValue) {
+        return "-";
+    }
+
+    const date = new Date(
+        `${dateValue}T00:00:00`
+    );
+
+    return date.toLocaleDateString(
+        "tr-TR",
+        {
+            day: "2-digit",
+            month: "2-digit",
+            year: "numeric"
+        }
+    );
+}
+
+function getTrendPanelClass(direction) {
+    const classMap = {
+        "Yükselen": "zone-trend-rising",
+        "Düşen": "zone-trend-falling",
+        "Stabil": "zone-trend-stable",
+        "Veri Yok": "zone-trend-no-data"
+    };
+
+    return (
+        classMap[direction]
+        || "zone-trend-no-data"
+    );
+}
+
+function getTrendIcon(direction) {
+    const iconMap = {
+        "Yükselen": "↑",
+        "Düşen": "↓",
+        "Stabil": "→",
+        "Veri Yok": "–"
+    };
+
+    return iconMap[direction] || "–";
+}
+
+function formatTrendPercentage(value) {
+    if (
+        value === null
+        || value === undefined
+    ) {
+        return "-";
+    }
+
+    const number = Number(value);
+
+    const prefix =
+        number > 0
+            ? "+"
+            : "";
+
+    return (
+        prefix
+        + number.toLocaleString(
+            "tr-TR",
+            {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2
+            }
+        )
+        + "%"
+    );
+}
+
+function renderZoneTrend(trend) {
+    const panel = document.getElementById(
+        "zone-trend-panel"
+    );
+
+    if (!panel) {
+        return;
+    }
+
+    const direction =
+        trend.trend_direction || "Veri Yok";
+
+    panel.className =
+        "zone-trend-panel "
+        + getTrendPanelClass(direction);
+
+    setElementText(
+        "zone-trend-direction",
+        `${getTrendIcon(direction)} ${direction}`
+    );
+
+    setElementText(
+        "zone-trend-percentage",
+        formatTrendPercentage(
+            trend.change_percentage
+        )
+    );
+
+    setElementText(
+        "zone-trend-current",
+        Number(
+            trend.current_period_trip_count || 0
+        ).toLocaleString("tr-TR")
+    );
+
+    setElementText(
+        "zone-trend-previous",
+        Number(
+            trend.previous_period_trip_count || 0
+        ).toLocaleString("tr-TR")
+    );
+
+    const currentPeriod =
+        `${formatTrendDate(
+            trend.current_period_start
+        )} – ${formatTrendDate(
+            trend.current_period_end
+        )}`;
+
+    const previousPeriod =
+        `${formatTrendDate(
+            trend.previous_period_start
+        )} – ${formatTrendDate(
+            trend.previous_period_end
+        )}`;
+
+    setElementText(
+        "zone-trend-period",
+        `Son dönem: ${currentPeriod} · `
+        + `Önceki dönem: ${previousPeriod}`
+    );
+}
+
+async function loadZoneTrend(locationId) {
+    try {
+        const trend = await fetchJson(
+            buildZoneTrendUrl(locationId, 7)
+        );
+
+        renderZoneTrend(trend);
+
+        return true;
+    } catch (error) {
+        console.error(
+            "Zone trend yükleme hatası:",
+            error
+        );
+
+        clearZoneTrend();
+
+        return false;
+    }
+}
+
+function clearZoneTrend() {
+    const panel = document.getElementById(
+        "zone-trend-panel"
+    );
+
+    if (!panel) {
+        return;
+    }
+
+    panel.className =
+        "zone-trend-panel zone-trend-no-data";
+
+    setElementText(
+        "zone-trend-direction",
+        "Zone seçilmedi"
+    );
+
+    setElementText(
+        "zone-trend-percentage",
+        "-"
+    );
+
+    setElementText(
+        "zone-trend-current",
+        "-"
+    );
+
+    setElementText(
+        "zone-trend-previous",
+        "-"
+    );
+
+    setElementText(
+        "zone-trend-period",
+        "-"
+    );
+}
+
 function getPriorityBadgeClass(priorityClass) {
     const classMap = {
         "Çok Yüksek": "zone-priority-very-high",
@@ -1807,6 +2029,18 @@ async function loadZoneDetails(locationId) {
 
         return false;
     }
+}
+
+async function loadZoneAnalytics(locationId) {
+    const [
+        detailsLoaded,
+        trendLoaded
+    ] = await Promise.all([
+        loadZoneDetails(locationId),
+        loadZoneTrend(locationId)
+    ]);
+
+    return detailsLoaded || trendLoaded;
 }
 
 function clearZoneDetails() {

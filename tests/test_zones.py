@@ -302,3 +302,84 @@ def test_unknown_zone_details_returns_404(
     assert response.json() == {
         "detail": "Taxi Zone bulunamadı."
     }
+    
+def test_zone_trend(
+    client: TestClient,
+    monkeypatch,
+) -> None:
+    expected_result = {
+        "location_id": 161,
+        "zone_name": "Midtown Center",
+        "borough": "Manhattan",
+        "period_days": 7,
+        "current_period_start": "2026-01-26",
+        "current_period_end": "2026-02-01",
+        "previous_period_start": "2026-01-19",
+        "previous_period_end": "2026-01-25",
+        "current_period_trip_count": 34200,
+        "previous_period_trip_count": 30400,
+        "change_amount": 3800,
+        "change_percentage": 12.5,
+        "trend_direction": "Yükselen",
+    }
+
+    def fake_get_zone_trend(
+        location_id,
+        filters,
+        period_days,
+    ):
+        assert location_id == 161
+        assert period_days == 7
+
+        return expected_result
+
+    monkeypatch.setattr(
+        zones_router,
+        "get_zone_trend_service",
+        fake_get_zone_trend,
+    )
+
+    response = client.get(
+        "/api/v1/zones/161/trend"
+    )
+
+    assert response.status_code == 200
+    assert response.json() == expected_result
+    
+def test_unknown_zone_trend_returns_404(
+    client: TestClient,
+    monkeypatch,
+) -> None:
+    def fake_get_zone_trend(
+        location_id,
+        filters,
+        period_days,
+    ):
+        assert location_id == 9999
+        assert period_days == 7
+
+        return None
+
+    monkeypatch.setattr(
+        zones_router,
+        "get_zone_trend_service",
+        fake_get_zone_trend,
+    )
+
+    response = client.get(
+        "/api/v1/zones/9999/trend"
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "Taxi Zone bulunamadı."
+    }
+    
+def test_invalid_zone_trend_period_returns_422(
+    client: TestClient,
+) -> None:
+    response = client.get(
+        "/api/v1/zones/161/trend?period_days=1"
+    )
+
+    assert response.status_code == 422

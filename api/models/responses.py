@@ -142,3 +142,23 @@ class DailyDemandForecastItem(BaseModel):
     lower_bound: int
     upper_bound: int
     sample_count: int
+    
+class ZoneTrendResponse(BaseModel):
+    location_id: int
+    zone_name: str
+    borough: str
+
+    period_days: int
+
+    current_period_start: date
+    current_period_end: date
+    previous_period_start: date
+    previous_period_end: date
+
+    current_period_trip_count: int
+    previous_period_trip_count: int
+
+    change_amount: int
+    change_percentage: float | None
+
+    trend_direction: str

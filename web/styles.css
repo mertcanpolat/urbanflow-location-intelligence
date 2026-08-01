@@ -1162,3 +1162,133 @@ main {
         height: 230px;
     }
 }
+
+.zone-trend-panel {
+    margin-top: 14px;
+    padding: 12px;
+
+    border: 1px solid #e2e8f0;
+    border-radius: 9px;
+
+    background: #f8fafc;
+}
+
+.zone-trend-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.zone-trend-label {
+    display: block;
+    margin-bottom: 4px;
+
+    color: #64748b;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.zone-trend-header strong {
+    color: #0f172a;
+    font-size: 15px;
+}
+
+.zone-trend-percentage {
+    flex-shrink: 0;
+
+    padding: 5px 8px;
+    border-radius: 999px;
+
+    background: #e2e8f0;
+    color: #475569;
+
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.zone-trend-rising {
+    border-color: #bbf7d0;
+    background: #f0fdf4;
+}
+
+.zone-trend-rising .zone-trend-percentage {
+    background: #dcfce7;
+    color: #15803d;
+}
+
+.zone-trend-falling {
+    border-color: #fecaca;
+    background: #fef2f2;
+}
+
+.zone-trend-falling .zone-trend-percentage {
+    background: #fee2e2;
+    color: #b91c1c;
+}
+
+.zone-trend-stable {
+    border-color: #bfdbfe;
+    background: #eff6ff;
+}
+
+.zone-trend-stable .zone-trend-percentage {
+    background: #dbeafe;
+    color: #1d4ed8;
+}
+
+.zone-trend-no-data {
+    border-color: #e2e8f0;
+    background: #f8fafc;
+}
+
+.zone-trend-comparison {
+    display: grid;
+    grid-template-columns:
+        minmax(0, 1fr)
+        auto
+        minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+
+    margin-top: 12px;
+}
+
+.zone-trend-comparison > div:not(
+    .zone-trend-divider
+) {
+    min-width: 0;
+}
+
+.zone-trend-comparison span {
+    display: block;
+    margin-bottom: 4px;
+
+    color: #64748b;
+    font-size: 10px;
+}
+
+.zone-trend-comparison strong {
+    display: block;
+
+    color: #0f172a;
+    font-size: 13px;
+}
+
+.zone-trend-divider {
+    color: #94a3b8;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.zone-trend-period {
+    margin-top: 10px;
+    padding-top: 9px;
+
+    border-top: 1px solid #e2e8f0;
+
+    color: #64748b;
+    font-size: 10px;
+    line-height: 1.4;
+}

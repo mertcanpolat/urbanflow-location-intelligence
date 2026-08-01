@@ -14,6 +14,7 @@ from api.models.responses import (
     ZoneHotspotFeatureCollection,
     ZoneScoreFeatureCollection,
     ZoneDetailResponse,
+    ZoneTrendResponse,
 )
 
 from api.services.zone_service import (
@@ -24,7 +25,8 @@ from api.services.zone_service import (
     get_zones_geojson as get_zones_geojson_service,
     get_zone_hotspots as get_zone_hotspots_service,
     get_zone_scores as get_zone_scores_service,
-    get_zone_details as get_zone_details_service,    
+    get_zone_details as get_zone_details_service,
+    get_zone_trend as get_zone_trend_service,    
 )
 
 router = APIRouter(
@@ -130,6 +132,40 @@ def get_zone_details(
     result = get_zone_details_service(
         location_id=location_id,
         filters=filters,
+    )
+
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Taxi Zone bulunamadı.",
+        )
+
+    return result
+
+@router.get(
+    "/zones/{location_id}/trend",
+    response_model=ZoneTrendResponse,
+)
+def get_zone_trend(
+    location_id: int,
+    filters: DashboardFilters = Depends(
+        get_dashboard_filters
+    ),
+    period_days: int = Query(
+        default=7,
+        ge=2,
+        le=30,
+        description=(
+            "Karşılaştırılacak dönemlerin gün sayısı."
+        ),
+    ),
+) -> dict[str, Any]:
+    """Return demand trend for one Taxi Zone."""
+
+    result = get_zone_trend_service(
+        location_id=location_id,
+        filters=filters,
+        period_days=period_days,
     )
 
     if result is None:

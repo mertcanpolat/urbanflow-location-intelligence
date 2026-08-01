@@ -1661,3 +1661,290 @@ def fetch_zone_details(
     )
 
     return result
+
+def fetch_zone_trend(
+    location_id: int,
+    filters: DashboardFilters,
+    period_days: int,
+) -> dict[str, Any] | None:
+    filter_parameters = filters_to_dict(filters)
+
+    parameters = {
+        "location_id": location_id,
+        "hour": filter_parameters.get("hour"),
+        "weekday": filter_parameters.get("weekday"),
+        "date_to": filter_parameters.get("date_to"),
+        "period_days": period_days,
+    }
+
+    logger.info(
+        "Fetching zone trend: location_id=%s "
+        "period_days=%s filters=%s",
+        location_id,
+        period_days,
+        filter_parameters,
+    )
+
+    query = text(
+        """
+        WITH dataset_bounds AS (
+            SELECT
+                MAX(
+                    pickup_date
+                )::date AS maximum_date
+
+            FROM analytics.zone_hourly_demand
+
+            WHERE (
+                CAST(:hour AS SMALLINT) IS NULL
+                OR pickup_hour = CAST(:hour AS SMALLINT)
+            )
+            AND (
+                CAST(:weekday AS SMALLINT) IS NULL
+                OR EXTRACT(
+                    ISODOW FROM pickup_date
+                ) = CAST(:weekday AS SMALLINT)
+            )
+        ),
+
+        period_bounds AS (
+            SELECT
+                LEAST(
+                    COALESCE(
+                        CAST(:date_to AS DATE),
+                        maximum_date
+                    ),
+                    maximum_date
+                )::date AS current_period_end
+
+            FROM dataset_bounds
+        ),
+
+        calculated_periods AS (
+            SELECT
+                current_period_end,
+
+                (
+                    current_period_end
+                    - (
+                        CAST(:period_days AS INTEGER)
+                        - 1
+                    )
+                )::date AS current_period_start,
+
+                (
+                    current_period_end
+                    - CAST(:period_days AS INTEGER)
+                )::date AS previous_period_end,
+
+                (
+                    current_period_end
+                    - (
+                        CAST(:period_days AS INTEGER)
+                        * 2
+                        - 1
+                    )
+                )::date AS previous_period_start
+
+            FROM period_bounds
+        ),
+
+        filtered_demand AS (
+            SELECT
+                d.pickup_date,
+
+                SUM(
+                    d.trip_count
+                )::bigint AS trip_count
+
+            FROM analytics.zone_hourly_demand AS d
+
+            CROSS JOIN calculated_periods AS p
+
+            WHERE d.location_id = :location_id
+
+            AND (
+                CAST(:hour AS SMALLINT) IS NULL
+                OR d.pickup_hour = CAST(:hour AS SMALLINT)
+            )
+
+            AND (
+                CAST(:weekday AS SMALLINT) IS NULL
+                OR EXTRACT(
+                    ISODOW FROM d.pickup_date
+                ) = CAST(:weekday AS SMALLINT)
+            )
+
+            AND d.pickup_date
+                BETWEEN
+                    p.previous_period_start
+                AND
+                    p.current_period_end
+
+            GROUP BY d.pickup_date
+        ),
+
+        period_totals AS (
+            SELECT
+                p.current_period_start,
+                p.current_period_end,
+                p.previous_period_start,
+                p.previous_period_end,
+
+                COALESCE(
+                    SUM(
+                        CASE
+                            WHEN d.pickup_date
+                                BETWEEN
+                                    p.current_period_start
+                                AND
+                                    p.current_period_end
+                            THEN d.trip_count
+                            ELSE 0
+                        END
+                    ),
+                    0
+                )::bigint AS current_period_trip_count,
+
+                COALESCE(
+                    SUM(
+                        CASE
+                            WHEN d.pickup_date
+                                BETWEEN
+                                    p.previous_period_start
+                                AND
+                                    p.previous_period_end
+                            THEN d.trip_count
+                            ELSE 0
+                        END
+                    ),
+                    0
+                )::bigint AS previous_period_trip_count
+
+            FROM calculated_periods AS p
+
+            LEFT JOIN filtered_demand AS d
+                ON TRUE
+
+            GROUP BY
+                p.current_period_start,
+                p.current_period_end,
+                p.previous_period_start,
+                p.previous_period_end
+        ),
+
+        calculated_change AS (
+            SELECT
+                current_period_start,
+                current_period_end,
+                previous_period_start,
+                previous_period_end,
+                current_period_trip_count,
+                previous_period_trip_count,
+
+                (
+                    current_period_trip_count
+                    - previous_period_trip_count
+                )::bigint AS change_amount,
+
+                CASE
+                    WHEN previous_period_trip_count = 0
+                        THEN NULL
+
+                    ELSE ROUND(
+                        (
+                            100.0
+                            * (
+                                current_period_trip_count
+                                - previous_period_trip_count
+                            )
+                            / previous_period_trip_count
+                        )::numeric,
+                        2
+                    )
+                END AS change_percentage
+
+            FROM period_totals
+        )
+
+        SELECT
+            z.location_id,
+            z.zone_name,
+            z.borough,
+
+            CAST(
+                :period_days AS INTEGER
+            ) AS period_days,
+
+            c.current_period_start,
+            c.current_period_end,
+            c.previous_period_start,
+            c.previous_period_end,
+
+            c.current_period_trip_count,
+            c.previous_period_trip_count,
+            c.change_amount,
+            c.change_percentage,
+
+            CASE
+                WHEN
+                    c.current_period_trip_count = 0
+                    AND c.previous_period_trip_count = 0
+                    THEN 'Veri Yok'
+
+                WHEN
+                    c.previous_period_trip_count = 0
+                    AND c.current_period_trip_count > 0
+                    THEN 'Yükselen'
+
+                WHEN c.change_percentage > 5
+                    THEN 'Yükselen'
+
+                WHEN c.change_percentage < -5
+                    THEN 'Düşen'
+
+                ELSE 'Stabil'
+            END AS trend_direction
+
+        FROM core.taxi_zones AS z
+
+        CROSS JOIN calculated_change AS c
+
+        WHERE z.location_id = :location_id
+        """
+    )
+
+    with engine.connect() as connection:
+        row = (
+            connection.execute(
+                query,
+                parameters,
+            )
+            .mappings()
+            .one_or_none()
+        )
+
+    if row is None:
+        logger.warning(
+            "Zone trend not found: location_id=%s",
+            location_id,
+        )
+
+        return None
+
+    result = dict(row)
+
+    if result["change_percentage"] is not None:
+        result["change_percentage"] = float(
+            result["change_percentage"]
+        )
+
+    logger.info(
+        "Zone trend fetched: location_id=%s "
+        "direction=%s change_percentage=%s",
+        location_id,
+        result["trend_direction"],
+        result["change_percentage"],
+    )
+
+    return result
