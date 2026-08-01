@@ -231,3 +231,74 @@ def test_zone_scores(
 
     assert response.status_code == 200
     assert response.json() == expected_result
+    
+    
+def test_zone_details(
+    client: TestClient,
+    monkeypatch,
+) -> None:
+    expected_result = {
+        "location_id": 161,
+        "zone_name": "Midtown Center",
+        "borough": "Manhattan",
+        "trip_count": 146221,
+        "avg_total_amount": 24.50,
+        "avg_trip_distance": 3.25,
+        "active_day_count": 31,
+        "total_day_count": 33,
+        "peak_weekday": 5,
+        "peak_weekday_name": "Cuma",
+        "peak_hour": 18,
+        "demand_score": 99.23,
+        "hotspot_component_score": 100.0,
+        "consistency_score": 93.94,
+        "zone_score": 98.40,
+        "priority_class": "Çok Yüksek",
+        "hotspot_class": "Hotspot",
+    }
+
+    def fake_get_zone_details(
+        location_id,
+        filters,
+    ):
+        assert location_id == 161
+        return expected_result
+
+    monkeypatch.setattr(
+        zones_router,
+        "get_zone_details_service",
+        fake_get_zone_details,
+    )
+
+    response = client.get(
+        "/api/v1/zones/161/details"
+    )
+
+    assert response.status_code == 200
+    assert response.json() == expected_result
+    
+def test_unknown_zone_details_returns_404(
+    client: TestClient,
+    monkeypatch,
+) -> None:
+    def fake_get_zone_details(
+        location_id,
+        filters,
+    ):
+        assert location_id == 9999
+        return None
+
+    monkeypatch.setattr(
+        zones_router,
+        "get_zone_details_service",
+        fake_get_zone_details,
+    )
+
+    response = client.get(
+        "/api/v1/zones/9999/details"
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "Taxi Zone bulunamadı."
+    }

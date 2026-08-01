@@ -84,7 +84,31 @@ class ZoneHotspotFeature(BaseModel):
 class ZoneHotspotFeatureCollection(BaseModel):
     type: str
     features: list[ZoneHotspotFeature]
-    
+
+class ZoneDetailResponse(BaseModel):
+    location_id: int
+    zone_name: str
+    borough: str
+
+    trip_count: int
+    avg_total_amount: float | None
+    avg_trip_distance: float | None
+
+    active_day_count: int
+    total_day_count: int
+
+    peak_weekday: int | None
+    peak_weekday_name: str | None
+    peak_hour: int | None
+
+    demand_score: float
+    hotspot_component_score: float
+    consistency_score: float
+    zone_score: float
+
+    priority_class: str
+    hotspot_class: str
+        
 class HourlyDemandItem(BaseModel):
     pickup_hour: int
     trip_count: int

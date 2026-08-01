@@ -11,6 +11,7 @@ from api.repositories.zone_repository import (
     fetch_zones_geojson,
     fetch_zone_hotspots,
     fetch_zone_scores,
+    fetch_zone_details,
 )
 
 
@@ -117,3 +118,30 @@ def get_zone_scores(
     )
 
     return fetch_zone_scores(filters)
+
+def get_zone_details(
+    location_id: int,
+    filters: DashboardFilters,
+) -> dict[str, Any] | None:
+    """Return detailed analytics for one Taxi Zone."""
+
+    logger.info(
+        "Preparing zone details: location_id=%s",
+        location_id,
+    )
+
+    zone = fetch_zone_by_id(location_id)
+
+    if zone is None:
+        logger.warning(
+            "Details requested for unknown zone: "
+            "location_id=%s",
+            location_id,
+        )
+
+        return None
+
+    return fetch_zone_details(
+        location_id=location_id,
+        filters=filters,
+    )

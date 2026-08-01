@@ -1144,3 +1144,520 @@ def fetch_zone_scores(
         "type": "FeatureCollection",
         "features": features,
     }
+    
+def fetch_zone_details(
+    location_id: int,
+    filters: DashboardFilters,
+) -> dict[str, Any] | None:
+    parameters = {
+        **filters_to_dict(filters),
+        "location_id": location_id,
+    }
+
+    logger.info(
+        "Fetching zone details: location_id=%s filters=%s",
+        location_id,
+        filters_to_dict(filters),
+    )
+
+    query = text(
+        """
+        WITH filtered_hourly_demand AS (
+            SELECT
+                d.location_id,
+                d.pickup_date,
+                d.pickup_hour,
+
+                SUM(
+                    d.trip_count
+                )::bigint AS trip_count,
+
+                SUM(
+                    d.total_amount
+                )::numeric AS total_amount,
+
+                SUM(
+                    d.avg_trip_distance
+                    * d.trip_count
+                )::numeric AS weighted_trip_distance
+
+            FROM analytics.zone_hourly_demand AS d
+
+            JOIN core.taxi_zones AS z
+                ON d.location_id = z.location_id
+
+            WHERE (
+                CAST(:borough AS VARCHAR) IS NULL
+                OR z.borough = CAST(:borough AS VARCHAR)
+            )
+            AND (
+                CAST(:hour AS SMALLINT) IS NULL
+                OR d.pickup_hour = CAST(:hour AS SMALLINT)
+            )
+            AND (
+                CAST(:weekday AS SMALLINT) IS NULL
+                OR EXTRACT(
+                    ISODOW FROM d.pickup_date
+                ) = CAST(:weekday AS SMALLINT)
+            )
+            AND (
+                CAST(:date_from AS DATE) IS NULL
+                OR d.pickup_date >= CAST(:date_from AS DATE)
+            )
+            AND (
+                CAST(:date_to AS DATE) IS NULL
+                OR d.pickup_date <= CAST(:date_to AS DATE)
+            )
+
+            GROUP BY
+                d.location_id,
+                d.pickup_date,
+                d.pickup_hour
+        ),
+
+        period_statistics AS (
+            SELECT
+                COUNT(
+                    DISTINCT pickup_date
+                )::integer AS total_day_count
+
+            FROM filtered_hourly_demand
+        ),
+
+        zone_metrics AS (
+            SELECT
+                location_id,
+
+                SUM(
+                    trip_count
+                )::bigint AS trip_count,
+
+                ROUND(
+                    (
+                        SUM(total_amount)
+                        / NULLIF(
+                            SUM(trip_count),
+                            0
+                        )
+                    )::numeric,
+                    2
+                ) AS avg_total_amount,
+
+                ROUND(
+                    (
+                        SUM(weighted_trip_distance)
+                        / NULLIF(
+                            SUM(trip_count),
+                            0
+                        )
+                    )::numeric,
+                    2
+                ) AS avg_trip_distance,
+
+                COUNT(
+                    DISTINCT pickup_date
+                )::integer AS active_day_count
+
+            FROM filtered_hourly_demand
+
+            GROUP BY location_id
+        ),
+
+        selected_zones AS (
+            SELECT
+                z.location_id,
+                z.zone_name,
+                z.borough,
+                z.geom,
+
+                COALESCE(
+                    m.trip_count,
+                    0
+                )::bigint AS trip_count,
+
+                m.avg_total_amount,
+                m.avg_trip_distance,
+
+                COALESCE(
+                    m.active_day_count,
+                    0
+                )::integer AS active_day_count,
+
+                COALESCE(
+                    p.total_day_count,
+                    0
+                )::integer AS total_day_count
+
+            FROM core.taxi_zones AS z
+
+            LEFT JOIN zone_metrics AS m
+                ON z.location_id = m.location_id
+
+            CROSS JOIN period_statistics AS p
+
+            WHERE (
+                CAST(:borough AS VARCHAR) IS NULL
+                OR z.borough = CAST(:borough AS VARCHAR)
+            )
+        ),
+
+        neighbours AS (
+            SELECT
+                a.location_id,
+
+                COUNT(
+                    b.location_id
+                )::integer AS neighbour_count,
+
+                COALESCE(
+                    AVG(
+                        b.trip_count
+                    ),
+                    0
+                )::numeric AS neighbour_avg_trip_count
+
+            FROM selected_zones AS a
+
+            LEFT JOIN selected_zones AS b
+                ON a.location_id <> b.location_id
+                AND ST_Touches(
+                    a.geom,
+                    b.geom
+                )
+
+            GROUP BY a.location_id
+        ),
+
+        spatial_metrics AS (
+            SELECT
+                z.location_id,
+                z.zone_name,
+                z.borough,
+                z.geom,
+                z.trip_count,
+                z.avg_total_amount,
+                z.avg_trip_distance,
+                z.active_day_count,
+                z.total_day_count,
+
+                COALESCE(
+                    n.neighbour_count,
+                    0
+                )::integer AS neighbour_count,
+
+                COALESCE(
+                    n.neighbour_avg_trip_count,
+                    0
+                )::numeric AS neighbour_avg_trip_count
+
+            FROM selected_zones AS z
+
+            LEFT JOIN neighbours AS n
+                ON z.location_id = n.location_id
+        ),
+
+        positive_demand_percentiles AS (
+            SELECT
+                location_id,
+
+                CUME_DIST() OVER (
+                    ORDER BY trip_count
+                ) AS demand_percentile
+
+            FROM spatial_metrics
+
+            WHERE trip_count > 0
+        ),
+
+        neighbour_percentiles AS (
+            SELECT
+                location_id,
+
+                CUME_DIST() OVER (
+                    ORDER BY neighbour_avg_trip_count
+                ) AS neighbour_percentile
+
+            FROM spatial_metrics
+        ),
+
+        component_scores AS (
+            SELECT
+                m.location_id,
+                m.zone_name,
+                m.borough,
+                m.trip_count,
+                m.avg_total_amount,
+                m.avg_trip_distance,
+                m.active_day_count,
+                m.total_day_count,
+                m.neighbour_count,
+
+                COALESCE(
+                    d.demand_percentile,
+                    0
+                ) AS demand_percentile,
+
+                COALESCE(
+                    n.neighbour_percentile,
+                    0
+                ) AS neighbour_percentile,
+
+                ROUND(
+                    (
+                        COALESCE(
+                            d.demand_percentile,
+                            0
+                        ) * 100
+                    )::numeric,
+                    2
+                ) AS demand_score,
+
+                CASE
+                    WHEN m.neighbour_count = 0
+                        THEN 50
+
+                    WHEN d.demand_percentile >= 0.80
+                    AND n.neighbour_percentile >= 0.80
+                        THEN 100
+
+                    WHEN d.demand_percentile >= 0.60
+                    AND n.neighbour_percentile >= 0.60
+                        THEN 75
+
+                    WHEN d.demand_percentile <= 0.20
+                    AND n.neighbour_percentile <= 0.20
+                        THEN 0
+
+                    WHEN d.demand_percentile <= 0.40
+                    AND n.neighbour_percentile <= 0.40
+                        THEN 25
+
+                    ELSE 50
+                END::numeric AS hotspot_component_score,
+
+                CASE
+                    WHEN m.neighbour_count = 0
+                        THEN 'Nötr'
+
+                    WHEN d.demand_percentile >= 0.80
+                    AND n.neighbour_percentile >= 0.80
+                        THEN 'Hotspot'
+
+                    WHEN d.demand_percentile >= 0.60
+                    AND n.neighbour_percentile >= 0.60
+                        THEN 'Potansiyel Hotspot'
+
+                    WHEN d.demand_percentile <= 0.20
+                    AND n.neighbour_percentile <= 0.20
+                        THEN 'Coldspot'
+
+                    WHEN d.demand_percentile <= 0.40
+                    AND n.neighbour_percentile <= 0.40
+                        THEN 'Potansiyel Coldspot'
+
+                    ELSE 'Nötr'
+                END AS hotspot_class,
+
+                ROUND(
+                    (
+                        100.0
+                        * m.active_day_count
+                        / NULLIF(
+                            m.total_day_count,
+                            0
+                        )
+                    )::numeric,
+                    2
+                ) AS consistency_score
+
+            FROM spatial_metrics AS m
+
+            LEFT JOIN positive_demand_percentiles AS d
+                ON m.location_id = d.location_id
+
+            LEFT JOIN neighbour_percentiles AS n
+                ON m.location_id = n.location_id
+        ),
+
+        final_scores AS (
+            SELECT
+                location_id,
+                zone_name,
+                borough,
+                trip_count,
+                avg_total_amount,
+                avg_trip_distance,
+                active_day_count,
+                total_day_count,
+                demand_score,
+                hotspot_component_score,
+                hotspot_class,
+
+                COALESCE(
+                    consistency_score,
+                    0
+                )::numeric AS consistency_score,
+
+                ROUND(
+                    (
+                        demand_score * 0.50
+                        + hotspot_component_score * 0.30
+                        + COALESCE(
+                            consistency_score,
+                            0
+                        ) * 0.20
+                    )::numeric,
+                    2
+                ) AS zone_score
+
+            FROM component_scores
+        ),
+
+        hourly_ranking AS (
+            SELECT
+                pickup_hour,
+
+                SUM(
+                    trip_count
+                )::bigint AS trip_count,
+
+                ROW_NUMBER() OVER (
+                    ORDER BY
+                        SUM(trip_count) DESC,
+                        pickup_hour
+                ) AS ranking
+
+            FROM filtered_hourly_demand
+
+            WHERE location_id = :location_id
+
+            GROUP BY pickup_hour
+        ),
+
+        weekday_ranking AS (
+            SELECT
+                EXTRACT(
+                    ISODOW FROM pickup_date
+                )::integer AS weekday,
+
+                SUM(
+                    trip_count
+                )::bigint AS trip_count,
+
+                ROW_NUMBER() OVER (
+                    ORDER BY
+                        SUM(trip_count) DESC,
+                        EXTRACT(
+                            ISODOW FROM pickup_date
+                        )
+                ) AS ranking
+
+            FROM filtered_hourly_demand
+
+            WHERE location_id = :location_id
+
+            GROUP BY
+                EXTRACT(
+                    ISODOW FROM pickup_date
+                )
+        )
+
+        SELECT
+            s.location_id,
+            s.zone_name,
+            s.borough,
+            s.trip_count,
+            s.avg_total_amount,
+            s.avg_trip_distance,
+            s.active_day_count,
+            s.total_day_count,
+
+            w.weekday AS peak_weekday,
+
+            CASE w.weekday
+                WHEN 1 THEN 'Pazartesi'
+                WHEN 2 THEN 'Salı'
+                WHEN 3 THEN 'Çarşamba'
+                WHEN 4 THEN 'Perşembe'
+                WHEN 5 THEN 'Cuma'
+                WHEN 6 THEN 'Cumartesi'
+                WHEN 7 THEN 'Pazar'
+                ELSE NULL
+            END AS peak_weekday_name,
+
+            h.pickup_hour AS peak_hour,
+
+            s.demand_score,
+            s.hotspot_component_score,
+            s.consistency_score,
+            s.zone_score,
+            s.hotspot_class,
+
+            CASE
+                WHEN s.zone_score >= 80
+                    THEN 'Çok Yüksek'
+
+                WHEN s.zone_score >= 60
+                    THEN 'Yüksek'
+
+                WHEN s.zone_score >= 40
+                    THEN 'Orta'
+
+                WHEN s.zone_score >= 20
+                    THEN 'Düşük'
+
+                ELSE 'Çok Düşük'
+            END AS priority_class
+
+        FROM final_scores AS s
+
+        LEFT JOIN hourly_ranking AS h
+            ON h.ranking = 1
+
+        LEFT JOIN weekday_ranking AS w
+            ON w.ranking = 1
+
+        WHERE s.location_id = :location_id
+        """
+    )
+
+    with engine.connect() as connection:
+        row = (
+            connection.execute(
+                query,
+                parameters,
+            )
+            .mappings()
+            .one_or_none()
+        )
+
+    if row is None:
+        logger.warning(
+            "Zone details not found: location_id=%s",
+            location_id,
+        )
+
+        return None
+
+    result = dict(row)
+
+    for field_name in (
+        "avg_total_amount",
+        "avg_trip_distance",
+        "demand_score",
+        "hotspot_component_score",
+        "consistency_score",
+        "zone_score",
+    ):
+        value = result.get(field_name)
+
+        if value is not None:
+            result[field_name] = float(value)
+
+    logger.info(
+        "Zone details fetched: location_id=%s zone_score=%s",
+        location_id,
+        result["zone_score"],
+    )
+
+    return result

@@ -13,6 +13,7 @@ from api.models.responses import (
     ZoneRankingItem,
     ZoneHotspotFeatureCollection,
     ZoneScoreFeatureCollection,
+    ZoneDetailResponse,
 )
 
 from api.services.zone_service import (
@@ -23,7 +24,7 @@ from api.services.zone_service import (
     get_zones_geojson as get_zones_geojson_service,
     get_zone_hotspots as get_zone_hotspots_service,
     get_zone_scores as get_zone_scores_service,
-    
+    get_zone_details as get_zone_details_service,    
 )
 
 router = APIRouter(
@@ -113,6 +114,31 @@ def get_zone_ranking(
         filters=filters,
         limit=limit,
     )
+
+@router.get(
+    "/zones/{location_id}/details",
+    response_model=ZoneDetailResponse,
+)
+def get_zone_details(
+    location_id: int,
+    filters: DashboardFilters = Depends(
+        get_dashboard_filters
+    ),
+) -> dict[str, Any]:
+    """Return detailed analytics for one Taxi Zone."""
+
+    result = get_zone_details_service(
+        location_id=location_id,
+        filters=filters,
+    )
+
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Taxi Zone bulunamadı.",
+        )
+
+    return result
 
 @router.get(
     "/zones/{location_id}/hourly",

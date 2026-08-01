@@ -413,6 +413,10 @@ function onEachFeature(feature, layer) {
                 properties.location_id,
                 `${properties.zone_name} · ${properties.borough}`
             );
+
+            loadZoneDetails(
+                properties.location_id
+            );
         }
     });
 }
@@ -945,6 +949,10 @@ function renderZoneRanking(zones) {
                     zone.location_id,
                     `${zone.zone_name} · ${zone.borough}`
                 );
+
+                loadZoneDetails(
+                    zone.location_id
+                );
             }
         );
 
@@ -999,6 +1007,7 @@ function resetHourlySelection() {
     clearHourlyChart(
         "Haritadan bir bölge seçin"
     );
+    clearZoneDetails();
 }
 
 async function refreshDashboard() {
@@ -1090,6 +1099,7 @@ async function refreshDashboard() {
         );
     } finally {
         setDashboardLoading(false);
+        
     }
 }
 
@@ -1561,6 +1571,206 @@ function validateDateFilters() {
     return true;
 }
 
+function buildZoneDetailsUrl(locationId) {
+    return buildFilteredApiUrl(
+        `/api/v1/zones/${locationId}/details`
+    );
+}
+
+function getPriorityBadgeClass(priorityClass) {
+    const classMap = {
+        "Çok Yüksek": "zone-priority-very-high",
+        "Yüksek": "zone-priority-high",
+        "Orta": "zone-priority-medium",
+        "Düşük": "zone-priority-low",
+        "Çok Düşük": "zone-priority-very-low"
+    };
+
+    return (
+        classMap[priorityClass]
+        || "zone-priority-very-low"
+    );
+}
+
+function renderZoneDetails(details) {
+    const panel = document.getElementById(
+        "zone-detail-panel"
+    );
+
+    const priorityBadge = document.getElementById(
+        "zone-detail-priority"
+    );
+
+    if (!panel || !priorityBadge) {
+        return;
+    }
+
+    setElementText(
+        "zone-detail-name",
+        details.zone_name
+    );
+
+    setElementText(
+        "zone-detail-location",
+        `${details.borough} · ID ${details.location_id}`
+    );
+
+    setElementText(
+        "zone-detail-priority",
+        details.priority_class
+    );
+
+    priorityBadge.className =
+        "zone-priority-badge "
+        + getPriorityBadgeClass(
+            details.priority_class
+        );
+
+    setElementText(
+        "zone-detail-score",
+        formatNullableNumber(
+            details.zone_score
+        )
+    );
+
+    const scoreProgress = document.getElementById(
+        "zone-score-progress-value"
+    );
+
+    if (scoreProgress) {
+        const score = Math.min(
+            Math.max(
+                Number(details.zone_score || 0),
+                0
+            ),
+            100
+        );
+
+        scoreProgress.style.width =
+            `${score}%`;
+    }
+
+    setElementText(
+        "zone-detail-trips",
+        Number(
+            details.trip_count || 0
+        ).toLocaleString("tr-TR")
+    );
+
+    setElementText(
+        "zone-detail-active-days",
+        `${Number(
+            details.active_day_count || 0
+        )} / ${Number(
+            details.total_day_count || 0
+        )}`
+    );
+
+    setElementText(
+        "zone-detail-peak-weekday",
+        details.peak_weekday_name || "-"
+    );
+
+    setElementText(
+        "zone-detail-peak-hour",
+        details.peak_hour !== null
+            && details.peak_hour !== undefined
+            ? `${String(
+                details.peak_hour
+            ).padStart(2, "0")}:00`
+            : "-"
+    );
+
+    setElementText(
+        "zone-detail-amount",
+        details.avg_total_amount !== null
+            ? `$${formatNullableNumber(
+                details.avg_total_amount
+            )}`
+            : "-"
+    );
+
+    setElementText(
+        "zone-detail-distance",
+        details.avg_trip_distance !== null
+            ? `${formatNullableNumber(
+                details.avg_trip_distance
+            )} mil`
+            : "-"
+    );
+
+    setElementText(
+        "zone-detail-demand-score",
+        formatNullableNumber(
+            details.demand_score
+        )
+    );
+
+    setElementText(
+        "zone-detail-hotspot-score",
+        formatNullableNumber(
+            details.hotspot_component_score
+        )
+    );
+
+    setElementText(
+        "zone-detail-consistency-score",
+        formatNullableNumber(
+            details.consistency_score
+        )
+    );
+
+    setElementText(
+        "zone-detail-hotspot-class",
+        details.hotspot_class || "-"
+    );
+
+    panel.hidden = false;
+}
+
+async function loadZoneDetails(locationId) {
+    try {
+        const details = await fetchJson(
+            buildZoneDetailsUrl(locationId)
+        );
+
+        renderZoneDetails(details);
+
+        return true;
+    } catch (error) {
+        console.error(
+            "Zone detay yükleme hatası:",
+            error
+        );
+
+        clearZoneDetails();
+
+        setDashboardStatus(
+            "Zone detayları yüklenemedi.",
+            "error"
+        );
+
+        return false;
+    }
+}
+
+function clearZoneDetails() {
+    const panel = document.getElementById(
+        "zone-detail-panel"
+    );
+
+    if (panel) {
+        panel.hidden = true;
+    }
+
+    const scoreProgress = document.getElementById(
+        "zone-score-progress-value"
+    );
+
+    if (scoreProgress) {
+        scoreProgress.style.width = "0%";
+    }
+}
 function buildHourlyDemandUrl(locationId) {
     const parameters =
         getDashboardFilterParameters();
