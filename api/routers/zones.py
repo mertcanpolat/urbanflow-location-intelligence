@@ -15,6 +15,7 @@ from api.models.responses import (
     ZoneScoreFeatureCollection,
     ZoneDetailResponse,
     ZoneTrendResponse,
+    ZoneAnomalyResponse,
 )
 
 from api.services.zone_service import (
@@ -26,7 +27,8 @@ from api.services.zone_service import (
     get_zone_hotspots as get_zone_hotspots_service,
     get_zone_scores as get_zone_scores_service,
     get_zone_details as get_zone_details_service,
-    get_zone_trend as get_zone_trend_service,    
+    get_zone_trend as get_zone_trend_service,
+    get_zone_anomalies as get_zone_anomalies_service,    
 )
 
 router = APIRouter(
@@ -166,6 +168,51 @@ def get_zone_trend(
         location_id=location_id,
         filters=filters,
         period_days=period_days,
+    )
+
+    if result is None:
+        raise HTTPException(
+            status_code=404,
+            detail="Taxi Zone bulunamadı.",
+        )
+
+    return result
+
+@router.get(
+    "/zones/{location_id}/anomalies",
+    response_model=ZoneAnomalyResponse,
+)
+def get_zone_anomalies(
+    location_id: int,
+    filters: DashboardFilters = Depends(
+        get_dashboard_filters
+    ),
+    analysis_days: int = Query(
+        default=28,
+        ge=14,
+        le=90,
+        description=(
+            "Anomali analizinde kullanılacak "
+            "takvim günü sayısı."
+        ),
+    ),
+    z_threshold: float = Query(
+        default=2.0,
+        ge=1.0,
+        le=4.0,
+        description=(
+            "Bir gözlemin anomali kabul edilmesi "
+            "için gereken mutlak Z-score sınırı."
+        ),
+    ),
+) -> dict[str, Any]:
+    """Return anomalous daily demand for one Taxi Zone."""
+
+    result = get_zone_anomalies_service(
+        location_id=location_id,
+        filters=filters,
+        analysis_days=analysis_days,
+        z_threshold=z_threshold,
     )
 
     if result is None:

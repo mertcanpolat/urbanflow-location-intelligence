@@ -13,6 +13,7 @@ from api.repositories.zone_repository import (
     fetch_zone_scores,
     fetch_zone_details,
     fetch_zone_trend,
+    fetch_zone_anomalies,
 )
 
 
@@ -176,4 +177,38 @@ def get_zone_trend(
         location_id=location_id,
         filters=filters,
         period_days=period_days,
+    )
+    
+def get_zone_anomalies(
+    location_id: int,
+    filters: DashboardFilters,
+    analysis_days: int,
+    z_threshold: float,
+) -> dict[str, Any] | None:
+    """Return anomalous daily-demand observations for one zone."""
+
+    logger.info(
+        "Preparing zone anomalies: location_id=%s "
+        "analysis_days=%s z_threshold=%s",
+        location_id,
+        analysis_days,
+        z_threshold,
+    )
+
+    zone = fetch_zone_by_id(location_id)
+
+    if zone is None:
+        logger.warning(
+            "Anomalies requested for unknown zone: "
+            "location_id=%s",
+            location_id,
+        )
+
+        return None
+
+    return fetch_zone_anomalies(
+        location_id=location_id,
+        filters=filters,
+        analysis_days=analysis_days,
+        z_threshold=z_threshold,
     )

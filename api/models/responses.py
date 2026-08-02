@@ -162,3 +162,33 @@ class ZoneTrendResponse(BaseModel):
     change_percentage: float | None
 
     trend_direction: str
+    
+class ZoneAnomalyItem(BaseModel):
+    pickup_date: date
+    trip_count: int
+
+    expected_trip_count: float
+    deviation_amount: float
+    deviation_percentage: float | None
+    z_score: float
+
+    anomaly_type: str
+
+
+class ZoneAnomalyResponse(BaseModel):
+    location_id: int
+    zone_name: str
+    borough: str
+
+    analysis_days: int
+    analysis_start: date
+    analysis_end: date
+
+    observation_count: int
+    mean_daily_trips: float
+    standard_deviation: float
+
+    z_threshold: float
+    anomaly_count: int
+
+    items: list[ZoneAnomalyItem]

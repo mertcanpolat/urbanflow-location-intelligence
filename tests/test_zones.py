@@ -383,3 +383,108 @@ def test_invalid_zone_trend_period_returns_422(
     )
 
     assert response.status_code == 422
+    
+def test_zone_anomalies(
+    client: TestClient,
+    monkeypatch,
+) -> None:
+    expected_result = {
+        "location_id": 161,
+        "zone_name": "Midtown Center",
+        "borough": "Manhattan",
+        "analysis_days": 28,
+        "analysis_start": "2026-01-05",
+        "analysis_end": "2026-02-01",
+        "observation_count": 28,
+        "mean_daily_trips": 4820.35,
+        "standard_deviation": 640.72,
+        "z_threshold": 2.0,
+        "anomaly_count": 1,
+        "items": [
+            {
+                "pickup_date": "2026-01-18",
+                "trip_count": 6350,
+                "expected_trip_count": 4820.35,
+                "deviation_amount": 1529.65,
+                "deviation_percentage": 31.73,
+                "z_score": 2.39,
+                "anomaly_type": "Yüksek Talep",
+            }
+        ],
+    }
+
+    def fake_get_zone_anomalies(
+        location_id,
+        filters,
+        analysis_days,
+        z_threshold,
+    ):
+        assert location_id == 161
+        assert analysis_days == 28
+        assert z_threshold == 2.0
+
+        return expected_result
+
+    monkeypatch.setattr(
+        zones_router,
+        "get_zone_anomalies_service",
+        fake_get_zone_anomalies,
+    )
+
+    response = client.get(
+        "/api/v1/zones/161/anomalies"
+    )
+
+    assert response.status_code == 200
+    assert response.json() == expected_result
+    
+def test_unknown_zone_anomalies_returns_404(
+    client: TestClient,
+    monkeypatch,
+) -> None:
+    def fake_get_zone_anomalies(
+        location_id,
+        filters,
+        analysis_days,
+        z_threshold,
+    ):
+        assert location_id == 9999
+        assert analysis_days == 28
+        assert z_threshold == 2.0
+
+        return None
+
+    monkeypatch.setattr(
+        zones_router,
+        "get_zone_anomalies_service",
+        fake_get_zone_anomalies,
+    )
+
+    response = client.get(
+        "/api/v1/zones/9999/anomalies"
+    )
+
+    assert response.status_code == 404
+    assert response.json() == {
+        "detail": "Taxi Zone bulunamadı."
+    }
+    
+def test_invalid_anomaly_analysis_days_returns_422(
+    client: TestClient,
+) -> None:
+    response = client.get(
+        "/api/v1/zones/161/anomalies"
+        "?analysis_days=7"
+    )
+
+    assert response.status_code == 422
+    
+def test_invalid_anomaly_threshold_returns_422(
+    client: TestClient,
+) -> None:
+    response = client.get(
+        "/api/v1/zones/161/anomalies"
+        "?z_threshold=0.5"
+    )
+
+    assert response.status_code == 422

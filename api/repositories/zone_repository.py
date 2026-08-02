@@ -1948,3 +1948,403 @@ def fetch_zone_trend(
     )
 
     return result
+
+def fetch_zone_anomalies(
+    location_id: int,
+    filters: DashboardFilters,
+    analysis_days: int,
+    z_threshold: float,
+) -> dict[str, Any] | None:
+    filter_parameters = filters_to_dict(filters)
+
+    parameters = {
+        "location_id": location_id,
+        "hour": filter_parameters.get("hour"),
+        "weekday": filter_parameters.get("weekday"),
+        "date_to": filter_parameters.get("date_to"),
+        "analysis_days": analysis_days,
+        "z_threshold": z_threshold,
+    }
+
+    logger.info(
+        "Fetching zone anomalies: location_id=%s "
+        "analysis_days=%s z_threshold=%s filters=%s",
+        location_id,
+        analysis_days,
+        z_threshold,
+        filter_parameters,
+    )
+
+    query = text(
+        """
+        WITH dataset_bounds AS (
+            SELECT
+                MAX(
+                    pickup_date
+                )::date AS maximum_date
+
+            FROM analytics.zone_hourly_demand
+
+            WHERE location_id = :location_id
+
+            AND (
+                CAST(:hour AS SMALLINT) IS NULL
+                OR pickup_hour = CAST(:hour AS SMALLINT)
+            )
+
+            AND (
+                CAST(:weekday AS SMALLINT) IS NULL
+                OR EXTRACT(
+                    ISODOW FROM pickup_date
+                ) = CAST(:weekday AS SMALLINT)
+            )
+        ),
+
+        analysis_bounds AS (
+            SELECT
+                LEAST(
+                    COALESCE(
+                        CAST(:date_to AS DATE),
+                        maximum_date
+                    ),
+                    maximum_date
+                )::date AS analysis_end
+
+            FROM dataset_bounds
+        ),
+
+        calculated_bounds AS (
+            SELECT
+                analysis_end,
+
+                (
+                    analysis_end
+                    - (
+                        CAST(:analysis_days AS INTEGER)
+                        - 1
+                    )
+                )::date AS analysis_start
+
+            FROM analysis_bounds
+        ),
+
+        calendar_days AS (
+            SELECT
+                generated_date::date AS pickup_date
+
+            FROM calculated_bounds AS b
+
+            CROSS JOIN LATERAL generate_series(
+                b.analysis_start,
+                b.analysis_end,
+                INTERVAL '1 day'
+            ) AS generated_date
+
+            WHERE (
+                CAST(:weekday AS SMALLINT) IS NULL
+                OR EXTRACT(
+                    ISODOW FROM generated_date
+                ) = CAST(:weekday AS SMALLINT)
+            )
+        ),
+
+        daily_demand AS (
+            SELECT
+                d.pickup_date,
+
+                SUM(
+                    d.trip_count
+                )::bigint AS trip_count
+
+            FROM analytics.zone_hourly_demand AS d
+
+            CROSS JOIN calculated_bounds AS b
+
+            WHERE d.location_id = :location_id
+
+            AND d.pickup_date
+                BETWEEN
+                    b.analysis_start
+                AND
+                    b.analysis_end
+
+            AND (
+                CAST(:hour AS SMALLINT) IS NULL
+                OR d.pickup_hour = CAST(:hour AS SMALLINT)
+            )
+
+            AND (
+                CAST(:weekday AS SMALLINT) IS NULL
+                OR EXTRACT(
+                    ISODOW FROM d.pickup_date
+                ) = CAST(:weekday AS SMALLINT)
+            )
+
+            GROUP BY d.pickup_date
+        ),
+
+        complete_daily_demand AS (
+            SELECT
+                c.pickup_date,
+
+                COALESCE(
+                    d.trip_count,
+                    0
+                )::bigint AS trip_count
+
+            FROM calendar_days AS c
+
+            LEFT JOIN daily_demand AS d
+                ON c.pickup_date = d.pickup_date
+        ),
+
+        demand_statistics AS (
+            SELECT
+                COUNT(*)::integer AS observation_count,
+
+                COALESCE(
+                    AVG(trip_count),
+                    0
+                )::numeric AS mean_daily_trips,
+
+                COALESCE(
+                    STDDEV_SAMP(trip_count),
+                    0
+                )::numeric AS standard_deviation
+
+            FROM complete_daily_demand
+        ),
+
+        scored_days AS (
+            SELECT
+                d.pickup_date,
+                d.trip_count,
+                s.observation_count,
+                s.mean_daily_trips,
+                s.standard_deviation,
+
+                (
+                    d.trip_count
+                    - s.mean_daily_trips
+                )::numeric AS deviation_amount,
+
+                CASE
+                    WHEN s.mean_daily_trips = 0
+                        THEN NULL
+
+                    ELSE (
+                        100.0
+                        * (
+                            d.trip_count
+                            - s.mean_daily_trips
+                        )
+                        / s.mean_daily_trips
+                    )::numeric
+                END AS deviation_percentage,
+
+                CASE
+                    WHEN s.standard_deviation = 0
+                        THEN 0
+
+                    ELSE (
+                        (
+                            d.trip_count
+                            - s.mean_daily_trips
+                        )
+                        / s.standard_deviation
+                    )::numeric
+                END AS z_score
+
+            FROM complete_daily_demand AS d
+
+            CROSS JOIN demand_statistics AS s
+        ),
+
+        anomaly_items AS (
+            SELECT
+                pickup_date,
+                trip_count,
+
+                ROUND(
+                    mean_daily_trips,
+                    2
+                ) AS expected_trip_count,
+
+                ROUND(
+                    deviation_amount,
+                    2
+                ) AS deviation_amount,
+
+                CASE
+                    WHEN deviation_percentage IS NULL
+                        THEN NULL
+
+                    ELSE ROUND(
+                        deviation_percentage,
+                        2
+                    )
+                END AS deviation_percentage,
+
+                ROUND(
+                    z_score,
+                    2
+                ) AS z_score,
+
+                CASE
+                    WHEN z_score >= CAST(
+                        :z_threshold AS NUMERIC
+                    )
+                        THEN 'Yüksek Talep'
+
+                    WHEN z_score <= -CAST(
+                        :z_threshold AS NUMERIC
+                    )
+                        THEN 'Düşük Talep'
+                END AS anomaly_type
+
+            FROM scored_days
+
+            WHERE ABS(z_score) >= CAST(
+                :z_threshold AS NUMERIC
+            )
+
+            ORDER BY
+                ABS(z_score) DESC,
+                pickup_date DESC
+        )
+
+        SELECT
+            z.location_id,
+            z.zone_name,
+            z.borough,
+
+            CAST(
+                :analysis_days AS INTEGER
+            ) AS analysis_days,
+
+            b.analysis_start,
+            b.analysis_end,
+
+            s.observation_count,
+
+            ROUND(
+                s.mean_daily_trips,
+                2
+            ) AS mean_daily_trips,
+
+            ROUND(
+                s.standard_deviation,
+                2
+            ) AS standard_deviation,
+
+            CAST(
+                :z_threshold AS NUMERIC
+            ) AS z_threshold,
+
+            (
+                SELECT COUNT(*)::integer
+                FROM anomaly_items
+            ) AS anomaly_count,
+
+            COALESCE(
+                (
+                    SELECT JSON_AGG(
+                        JSON_BUILD_OBJECT(
+                            'pickup_date',
+                            a.pickup_date,
+
+                            'trip_count',
+                            a.trip_count,
+
+                            'expected_trip_count',
+                            a.expected_trip_count,
+
+                            'deviation_amount',
+                            a.deviation_amount,
+
+                            'deviation_percentage',
+                            a.deviation_percentage,
+
+                            'z_score',
+                            a.z_score,
+
+                            'anomaly_type',
+                            a.anomaly_type
+                        )
+
+                        ORDER BY
+                            ABS(a.z_score) DESC,
+                            a.pickup_date DESC
+                    )
+
+                    FROM anomaly_items AS a
+                ),
+                '[]'::json
+            ) AS items
+
+        FROM core.taxi_zones AS z
+
+        CROSS JOIN calculated_bounds AS b
+        CROSS JOIN demand_statistics AS s
+
+        WHERE z.location_id = :location_id
+        """
+    )
+
+    with engine.connect() as connection:
+        row = (
+            connection.execute(
+                query,
+                parameters,
+            )
+            .mappings()
+            .one_or_none()
+        )
+
+    if row is None:
+        logger.warning(
+            "Zone anomalies not found: location_id=%s",
+            location_id,
+        )
+
+        return None
+
+    result = dict(row)
+
+    for field_name in (
+        "mean_daily_trips",
+        "standard_deviation",
+        "z_threshold",
+    ):
+        result[field_name] = float(
+            result[field_name] or 0
+        )
+
+    normalized_items = []
+
+    for item in result.get("items") or []:
+        normalized_item = dict(item)
+
+        for field_name in (
+            "expected_trip_count",
+            "deviation_amount",
+            "deviation_percentage",
+            "z_score",
+        ):
+            value = normalized_item.get(field_name)
+
+            if value is not None:
+                normalized_item[field_name] = float(value)
+
+        normalized_items.append(normalized_item)
+
+    result["items"] = normalized_items
+
+    logger.info(
+        "Zone anomalies fetched: location_id=%s "
+        "anomaly_count=%s",
+        location_id,
+        result["anomaly_count"],
+    )
+
+    return result

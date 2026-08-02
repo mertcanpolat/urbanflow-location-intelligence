@@ -662,6 +662,7 @@ async function initializeApplication() {
         populateHours();
         renderComparisonZoneList();
         clearZoneTrend();
+        clearZoneAnomalies();
         updateActiveFilterSummary();
         await loadBoroughs();
         await refreshDashboard();
@@ -1038,6 +1039,7 @@ function resetHourlySelection() {
     );
     clearZoneDetails();
     clearZoneTrend();
+    clearZoneAnomalies();
 }
 
 function resetZoneComparisonSilently() {
@@ -1643,6 +1645,38 @@ function buildZoneTrendUrl(
         : endpoint;
 }
 
+function buildZoneAnomaliesUrl(
+    locationId,
+    analysisDays = 28,
+    zThreshold = 2
+) {
+    const parameters =
+        getDashboardFilterParameters();
+
+    parameters.delete("borough");
+    parameters.delete("date_from");
+
+    parameters.set(
+        "analysis_days",
+        String(analysisDays)
+    );
+
+    parameters.set(
+        "z_threshold",
+        String(zThreshold)
+    );
+
+    const queryString =
+        parameters.toString();
+
+    const endpoint =
+        `/api/v1/zones/${locationId}/anomalies`;
+
+    return queryString
+        ? `${endpoint}?${queryString}`
+        : endpoint;
+}
+
 function formatTrendDate(dateValue) {
     if (!dateValue) {
         return "-";
@@ -1835,6 +1869,208 @@ function clearZoneTrend() {
         "zone-trend-period",
         "-"
     );
+}
+
+function getAnomalyTypeClass(anomalyType) {
+    return anomalyType === "Yüksek Talep"
+        ? "zone-anomaly-high"
+        : "zone-anomaly-low";
+}
+
+function renderZoneAnomalies(data) {
+    const panel = document.getElementById(
+        "zone-anomaly-panel"
+    );
+
+    const content = document.getElementById(
+        "zone-anomaly-content"
+    );
+
+    if (!panel || !content) {
+        return;
+    }
+
+    const items = Array.isArray(data.items)
+        ? data.items
+        : [];
+
+    const anomalyCount = Number(
+        data.anomaly_count || 0
+    );
+
+    panel.className =
+        "zone-anomaly-panel "
+        + (
+            anomalyCount > 0
+                ? "zone-anomaly-has-items"
+                : "zone-anomaly-no-items"
+        );
+
+    setElementText(
+        "zone-anomaly-count",
+        String(anomalyCount)
+    );
+
+    setElementText(
+        "zone-anomaly-summary",
+        anomalyCount > 0
+            ? `${anomalyCount} anormal gün bulundu`
+            : "Anomali bulunamadı"
+    );
+
+    setElementText(
+        "zone-anomaly-period",
+        `${formatTrendDate(
+            data.analysis_start
+        )} – ${formatTrendDate(
+            data.analysis_end
+        )} · Z eşik: ${formatNullableNumber(
+            data.z_threshold
+        )}`
+    );
+
+    if (items.length === 0) {
+        content.innerHTML = `
+            <div class="zone-anomaly-empty">
+                Seçilen dönemde anormal talep günü bulunmadı.
+            </div>
+        `;
+
+        return;
+    }
+
+    content.innerHTML = items
+        .slice(0, 3)
+        .map((item) => {
+            const typeClass =
+                getAnomalyTypeClass(
+                    item.anomaly_type
+                );
+
+            return `
+                <div class="zone-anomaly-item">
+                    <div class="zone-anomaly-item-header">
+                        <strong>
+                            ${formatTrendDate(
+                                item.pickup_date
+                            )}
+                        </strong>
+
+                        <span
+                            class="zone-anomaly-type ${typeClass}"
+                        >
+                            ${item.anomaly_type}
+                        </span>
+                    </div>
+
+                    <div class="zone-anomaly-metrics">
+                        <div>
+                            <span>Gerçek talep</span>
+                            <strong>
+                                ${Number(
+                                    item.trip_count || 0
+                                ).toLocaleString("tr-TR")}
+                            </strong>
+                        </div>
+
+                        <div>
+                            <span>Beklenen talep</span>
+                            <strong>
+                                ${formatNullableNumber(
+                                    item.expected_trip_count
+                                )}
+                            </strong>
+                        </div>
+
+                        <div>
+                            <span>Sapma</span>
+                            <strong>
+                                ${formatTrendPercentage(
+                                    item.deviation_percentage
+                                )}
+                            </strong>
+                        </div>
+
+                        <div>
+                            <span>Z-score</span>
+                            <strong>
+                                ${formatNullableNumber(
+                                    item.z_score
+                                )}
+                            </strong>
+                        </div>
+                    </div>
+                </div>
+            `;
+        })
+        .join("");
+}
+
+async function loadZoneAnomalies(locationId) {
+    try {
+        const anomalies = await fetchJson(
+            buildZoneAnomaliesUrl(
+                locationId,
+                28,
+                2
+            )
+        );
+
+        renderZoneAnomalies(anomalies);
+
+        return true;
+    } catch (error) {
+        console.error(
+            "Zone anomali yükleme hatası:",
+            error
+        );
+
+        clearZoneAnomalies(
+            "Anomali verileri yüklenemedi."
+        );
+
+        return false;
+    }
+}
+
+function clearZoneAnomalies(
+    message = "Zone seçilmedi"
+) {
+    const panel = document.getElementById(
+        "zone-anomaly-panel"
+    );
+
+    const content = document.getElementById(
+        "zone-anomaly-content"
+    );
+
+    if (!panel || !content) {
+        return;
+    }
+
+    panel.className =
+        "zone-anomaly-panel";
+
+    setElementText(
+        "zone-anomaly-summary",
+        message
+    );
+
+    setElementText(
+        "zone-anomaly-count",
+        "-"
+    );
+
+    setElementText(
+        "zone-anomaly-period",
+        "-"
+    );
+
+    content.innerHTML = `
+        <div class="zone-anomaly-empty">
+            ${message}
+        </div>
+    `;
 }
 
 function getPriorityBadgeClass(priorityClass) {
@@ -2034,13 +2270,15 @@ async function loadZoneDetails(locationId) {
 async function loadZoneAnalytics(locationId) {
     const [
         detailsLoaded,
-        trendLoaded
+        trendLoaded,
+        anomaliesLoaded
     ] = await Promise.all([
         loadZoneDetails(locationId),
-        loadZoneTrend(locationId)
+        loadZoneTrend(locationId),
+        loadZoneAnomalies(locationId)
     ]);
 
-    return detailsLoaded || trendLoaded;
+    return detailsLoaded || trendLoaded || anomaliesLoaded;
 }
 
 function clearZoneDetails() {

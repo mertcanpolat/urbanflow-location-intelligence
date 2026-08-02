@@ -1292,3 +1292,158 @@ main {
     font-size: 10px;
     line-height: 1.4;
 }
+
+.zone-anomaly-panel {
+    margin-top: 14px;
+    padding: 12px;
+
+    border: 1px solid #e2e8f0;
+    border-radius: 9px;
+
+    background: #f8fafc;
+}
+
+.zone-anomaly-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.zone-anomaly-label {
+    display: block;
+    margin-bottom: 4px;
+
+    color: #64748b;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.zone-anomaly-header strong {
+    color: #0f172a;
+    font-size: 14px;
+}
+
+.zone-anomaly-count {
+    flex-shrink: 0;
+
+    padding: 5px 8px;
+    border-radius: 999px;
+
+    background: #e2e8f0;
+    color: #475569;
+
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.zone-anomaly-has-items {
+    border-color: #fed7aa;
+    background: #fff7ed;
+}
+
+.zone-anomaly-has-items .zone-anomaly-count {
+    background: #ffedd5;
+    color: #c2410c;
+}
+
+.zone-anomaly-no-items {
+    border-color: #bbf7d0;
+    background: #f0fdf4;
+}
+
+.zone-anomaly-no-items .zone-anomaly-count {
+    background: #dcfce7;
+    color: #15803d;
+}
+
+.zone-anomaly-content {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+
+    margin-top: 12px;
+}
+
+.zone-anomaly-item {
+    padding: 10px;
+
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+
+    background: #ffffff;
+}
+
+.zone-anomaly-item-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.zone-anomaly-item-header strong {
+    color: #0f172a;
+    font-size: 12px;
+}
+
+.zone-anomaly-type {
+    font-size: 11px;
+    font-weight: 700;
+}
+
+.zone-anomaly-high {
+    color: #15803d;
+}
+
+.zone-anomaly-low {
+    color: #b91c1c;
+}
+
+.zone-anomaly-metrics {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+
+    margin-top: 8px;
+}
+
+.zone-anomaly-metrics div {
+    min-width: 0;
+}
+
+.zone-anomaly-metrics span {
+    display: block;
+    margin-bottom: 3px;
+
+    color: #64748b;
+    font-size: 10px;
+}
+
+.zone-anomaly-metrics strong {
+    display: block;
+
+    color: #0f172a;
+    font-size: 11px;
+}
+
+.zone-anomaly-empty {
+    padding: 12px;
+
+    border: 1px dashed #cbd5e1;
+    border-radius: 8px;
+
+    color: #64748b;
+    font-size: 11px;
+    text-align: center;
+}
+
+.zone-anomaly-period {
+    margin-top: 10px;
+    padding-top: 9px;
+
+    border-top: 1px solid #e2e8f0;
+
+    color: #64748b;
+    font-size: 10px;
+}
